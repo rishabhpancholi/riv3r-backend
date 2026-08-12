@@ -1,0 +1,1 @@
+ALTER TABLE refresh_tokens ADD COLUMN expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '7 days';

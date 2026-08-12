@@ -1,0 +1,22 @@
+[project]
+name = "riv3r"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { email = "pancholi.rishabh@tantranzm.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "bcrypt>=5.0.0",
+    "fastapi[standard]>=0.141.1",
+    "redis[asyncio]>=8.1.0",
+    "supabase>=2.31.0",
+]
+
+[project.scripts]
+riv3r = "riv3r:main"
+
+[build-system]
+requires = ["uv_build>=0.12.2,<0.13.0"]
+build-backend = "uv_build"

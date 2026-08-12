@@ -1,0 +1,2 @@
+ALTER TABLE refresh_tokens
+DROP CONSTRAINT refresh_tokens_refresh_token_key;
