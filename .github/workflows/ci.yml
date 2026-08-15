@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      APP_NAME: ${{ secrets.APP_NAME }}
+      APP_VERSION: ${{ secrets.APP_VERSION }}
+      APP_MODE: ${{ secrets.APP_MODE }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_KEY: ${{ secrets.DATABASE_KEY }}
+      CACHE_HOST: ${{ secrets.CACHE_HOST }}
+      CACHE_PORT: ${{ secrets.CACHE_PORT }}
+      CACHE_USERNAME: ${{ secrets.CACHE_USERNAME }}
+      CACHE_PASSWORD: ${{ secrets.CACHE_PASSWORD }}
+      CACHE_TTL: ${{ secrets.CACHE_TTL }}
+      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+      JWT_ALGORITHM: ${{ secrets.JWT_ALGORITHM }}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.JWT_ACCESS_TOKEN_EXPIRE_MINUTES }}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${{ secrets.JWT_REFRESH_TOKEN_EXPIRE_DAYS }}
+      LOGIN_MAX_REQUESTS: ${{ secrets.LOGIN_MAX_REQUESTS }}
+      LOGIN_WINDOW_SECONDS: ${{ secrets.LOGIN_WINDOW_SECONDS }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run tests
+        run: uv run pytest

@@ -90,7 +90,7 @@ async def refresh(
     )
 
     resp.set_cookie(
-        "refresh_token",
+        "access_token",
         response["fresh_access_token"],
         httponly=True,
         secure=True if load_settings().is_production else False,
