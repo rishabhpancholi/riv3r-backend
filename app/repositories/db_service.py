@@ -65,6 +65,16 @@ class DBRepository:
 
         return res.data[0] if res.data else None
 
+    async def get_org_membership(self, user_id: str) -> dict:
+        organization_members = self.db.table("organization_members")
+        res = (
+            await organization_members.select("*")
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+        return res.data[0] if res.data else None
+
     async def check_org_ownership(self, organization_id: str, user_id: str) -> bool:
         organization_members = self.db.table("organization_members")
         res = (

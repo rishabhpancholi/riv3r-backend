@@ -47,8 +47,11 @@ class OnboardingService:
         hashed_password = password.hash_password(organization.owner.password)
 
         organization_dict = organization.model_dump(exclude={"owner"}, mode="json")
+        organization_dict.update({"verification_status": "in_progress"})
         owner_dict = organization.owner.model_dump(exclude={"first_name", "last_name"})
-        owner_dict.update({"password": hashed_password, "is_resource": False})
+        owner_dict.update(
+            {"password": hashed_password, "is_resource": False, "verification_status": "in_progress"}
+        )
 
         org = await self.db_service.store_organization(organization_dict)
         owner_dict.update({"org_id": org["id"]})
@@ -120,7 +123,7 @@ class OnboardingService:
         hashed_password = password.hash_password(resource.password)
 
         user_dict = resource.model_dump(exclude={"title", "skills", "bio", "location", "first_name", "last_name", "experience_years", "portfolio_url", "linked_in_url"})
-        user_dict.update({"password": hashed_password, "is_resource": True})
+        user_dict.update({"password": hashed_password, "is_resource": True, "verification_status": "in_progress"})
         resource_dict = resource.model_dump(exclude={"email", "first_name", "last_name", "name", "password", "phone_number"}, mode="json")
 
         user = await self.db_service.store_user(user_dict)

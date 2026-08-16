@@ -1,8 +1,10 @@
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from app.api.auth.routes import deps
 from app.core import exceptions
+from app.repositories import cache_service, db_service
+from app.utils import jwt
 
 
 def login_payload(**overrides):
@@ -19,7 +21,7 @@ def user_response():
         "deleted_at": None,
         "email": "owner@example.com",
         "name": "John Doe",
-        "is_verified": False,
+        "verification_status": "in_progress",
         "phone_number": "+14155552671",
         "is_resource": False,
         "org_id": "some-org-id",
@@ -132,3 +134,32 @@ def test_me_success(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["email"] == "owner@example.com"
+
+
+def test_me_returns_fresh_user_from_db(client, monkeypatch):
+    fresh_user = user_response()
+    repo_mock = MagicMock()
+    repo_mock.get_user_with_id = AsyncMock(
+        return_value={**fresh_user, "password": "hashed-password"}
+    )
+    repo_mock.get_org_membership = AsyncMock(
+        return_value={"organization_id": "some-org-id", "is_owner": True}
+    )
+    monkeypatch.setattr(db_service, "DBRepository", lambda db: repo_mock)
+
+    cache_mock = MagicMock()
+    cache_mock.check_access_token_valid = AsyncMock(return_value=True)
+    monkeypatch.setattr(cache_service, "CacheRepository", lambda cache: cache_mock)
+
+    monkeypatch.setattr(jwt, "decode_token", lambda token: {"id": fresh_user["id"]})
+
+    client.cookies.set("access_token", "access-token")
+    response = client.get("/api/auth/me")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verification_status"] == "in_progress"
+    assert body["is_owner"] is True
+    assert "password" not in body
+
+    repo_mock.get_user_with_id.assert_awaited_once()

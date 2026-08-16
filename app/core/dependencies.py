@@ -5,7 +5,7 @@ from supabase import AsyncClient
 from app.core import exceptions
 from app.core.config import load_settings
 from app.core.rate_limiter import check_rate_limit, client_ip
-from app.repositories import cache_service
+from app.repositories import cache_service, db_service
 from app.utils import jwt
 
 
@@ -19,6 +19,7 @@ def get_cache(request: Request) -> Redis:
 
 async def get_current_user(
     request: Request,
+    db: AsyncClient = Depends(get_db),
     cache: Redis = Depends(get_cache),
 ) -> dict:
     access_token = request.cookies.get("access_token")
@@ -34,7 +35,17 @@ async def get_current_user(
             detail="Please make sure you are logged in"
         )
 
-    return jwt.decode_token(access_token)
+    payload = jwt.decode_token(access_token)
+
+    repository = db_service.DBRepository(db)
+    user = await repository.get_user_with_id(payload["id"])
+    user.pop("password", None)
+
+    if not user.get("is_resource"):
+        membership = await repository.get_org_membership(user["id"])
+        user["is_owner"] = membership["is_owner"] if membership else None
+
+    return user
 
 
 async def rate_limit_login(

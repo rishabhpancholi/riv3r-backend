@@ -16,7 +16,7 @@ def user_row():
         "name": "John Doe",
         "password": password.hash_password("StrongPass1!"),
         "phone_number": "+14155552671",
-        "is_verified": False,
+        "verification_status": "in_progress",
         "is_resource": False,
     }
 

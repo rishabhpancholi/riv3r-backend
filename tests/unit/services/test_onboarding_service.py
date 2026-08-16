@@ -62,7 +62,7 @@ def user_row(**overrides):
         "name": "John Doe",
         "password": "hashed-password",
         "phone_number": "+14155552671",
-        "is_verified": False,
+        "verification_status": "in_progress",
         "is_resource": False,
     }
     user.update(overrides)
@@ -114,11 +114,13 @@ def test_onboard_organization_success(repo):
     stored_org = repo.store_organization.call_args[0][0]
     assert stored_org["company_email"] == "acme@example.com"
     assert stored_org["website_url"] == "https://acme.com/"
+    assert stored_org["verification_status"] == "in_progress"
     assert "owner" not in stored_org
 
     stored_user = repo.store_user.call_args[0][0]
     assert stored_user["email"] == "owner@example.com"
     assert stored_user["is_resource"] is False
+    assert stored_user["verification_status"] == "in_progress"
     assert stored_user["org_id"] == result["organization"]["id"]
     assert stored_user["password"] != "StrongPass1!"
 
@@ -173,6 +175,7 @@ def test_onboard_resource_success(repo):
 
     stored_user = repo.store_user.call_args[0][0]
     assert stored_user["is_resource"] is True
+    assert stored_user["verification_status"] == "in_progress"
     assert stored_user["password"] != "StrongPass1!"
 
     stored_resource = repo.store_resource.call_args[0][0]

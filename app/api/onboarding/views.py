@@ -16,7 +16,7 @@ class Organization(RowMixin):
     registered_name: str
     website_url: Optional[str] = None
     industry: str
-    is_verified: bool
+    verification_status: Literal["in_progress", "approved", "rejected"]
     org_type: Literal["client", "agency", "riv3r"]
     owner: "User"
 
@@ -24,7 +24,7 @@ class Organization(RowMixin):
 class User(RowMixin):
     email: str
     name: str
-    is_verified: bool
+    verification_status: Literal["in_progress", "approved", "rejected"]
     phone_number: Optional[str] = None
     is_resource: bool
     org_id: Optional[str] = None
