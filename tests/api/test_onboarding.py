@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import AsyncMock
 
+from app.core import dependencies as deps
 from app.core import exceptions
 
 
@@ -197,3 +198,25 @@ def test_onboard_resource_rejects_same_portfolio_and_linkedin(client, monkeypatc
     response = client.post("/api/onboarding/resource", json=payload)
 
     assert response.status_code == 400
+
+
+def test_onboard_organization_rate_limited(client, monkeypatch):
+    def _rate_limited():
+        raise exceptions.RateLimitError()
+
+    client.app.dependency_overrides[deps.rate_limit_onboarding] = _rate_limited
+
+    response = client.post("/api/onboarding/organization", json=org_payload())
+
+    assert response.status_code == 429
+
+
+def test_onboard_resource_rate_limited(client, monkeypatch):
+    def _rate_limited():
+        raise exceptions.RateLimitError()
+
+    client.app.dependency_overrides[deps.rate_limit_onboarding] = _rate_limited
+
+    response = client.post("/api/onboarding/resource", json=resource_payload())
+
+    assert response.status_code == 429

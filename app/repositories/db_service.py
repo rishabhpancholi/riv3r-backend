@@ -127,6 +127,12 @@ class DBRepository:
             }
         ).execute()
 
+    async def store_audit_log(self, audit_log: dict) -> dict:
+        audit_logs = self.db.table("audit_logs")
+        res = await audit_logs.insert(audit_log).execute()
+
+        return res.data[0]
+
     async def store_refresh_token(self, user_id: str, refresh_token: str):
         refresh_tokens = self.db.table("refresh_tokens")
 

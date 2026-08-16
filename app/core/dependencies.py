@@ -61,3 +61,18 @@ async def rate_limit_login(
         window_seconds=settings.login_window_seconds,
     ):
         raise exceptions.RateLimitError()
+
+
+async def rate_limit_onboarding(
+    request: Request,
+    cache: Redis = Depends(get_cache),
+) -> None:
+    settings = load_settings()
+
+    if not await check_rate_limit(
+        cache,
+        key=f"onboarding:{client_ip(request)}",
+        max_requests=settings.login_max_requests,
+        window_seconds=settings.login_window_seconds,
+    ):
+        raise exceptions.RateLimitError()

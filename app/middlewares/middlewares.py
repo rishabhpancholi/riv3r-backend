@@ -6,6 +6,7 @@ from fastapi import Request
 class RequestTimeMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start = perf_counter()
+        request.state.start_time = start
         response = await call_next(request)
         response.headers["X-Process-Time"] = f"{(perf_counter() - start)*1000:.2f} ms"
         return response

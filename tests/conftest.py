@@ -32,6 +32,7 @@ def client():
     test_app.dependency_overrides[deps.get_db] = lambda: AsyncMock()
     test_app.dependency_overrides[deps.get_cache] = lambda: AsyncMock()
     test_app.dependency_overrides[deps.rate_limit_login] = lambda: None
+    test_app.dependency_overrides[deps.rate_limit_onboarding] = lambda: None
 
     with TestClient(test_app) as client:
         yield client

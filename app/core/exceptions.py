@@ -43,7 +43,7 @@ class PermissionError(Riv3rException):
 class RateLimitError(Riv3rException):
     def __init__(self):
         super().__init__(
-            message="Too many login attempts. Please try again later.",
+            message="Too many requests. Please try again later.",
             detail="Please try again later.",
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         )

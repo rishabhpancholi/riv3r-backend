@@ -6,6 +6,8 @@ from app.api.auth import schemas
 from app.api.onboarding import views
 from app.core import exceptions, dependencies as deps
 from app.services import auth
+from app.services.audit import AuditService
+from app.utils import jwt
 from app.core.config import load_settings
 
 load_settings()
@@ -18,6 +20,7 @@ auth_router = APIRouter(prefix="/api/auth", tags=["Auth"])
     response_model=views.User,
 )
 async def login_user(
+    req: Request,
     resp: Response,
     credentials: schemas.LoginUser,
     db: AsyncClient = Depends(deps.get_db),
@@ -39,6 +42,14 @@ async def login_user(
         httponly=True,
         secure=True if load_settings().is_production else False,
         samesite="lax",
+    )
+
+    audit_service = AuditService(db)
+    await audit_service.log(
+        req,
+        user_id=response["user"]["id"],
+        entity_type="user",
+        task_type="login",
     )
 
     return response["user"]
@@ -72,6 +83,20 @@ async def logout_user(
         samesite="lax",
     )
 
+    user_id = None
+    try:
+        user_id = jwt.decode_token(req.cookies["access_token"])["id"]
+    except Exception:
+        pass
+
+    audit_service = AuditService(db)
+    await audit_service.log(
+        req,
+        user_id=user_id,
+        entity_type="user",
+        task_type="logout",
+    )
+
 @auth_router.post("/refresh", status_code=status.HTTP_204_NO_CONTENT)
 async def refresh(
     req: Request,
@@ -95,6 +120,20 @@ async def refresh(
         httponly=True,
         secure=True if load_settings().is_production else False,
         samesite="lax",
+    )
+
+    user_id = None
+    try:
+        user_id = jwt.decode_token(req.cookies["refresh_token"])["id"]
+    except Exception:
+        pass
+
+    audit_service = AuditService(db)
+    await audit_service.log(
+        req,
+        user_id=user_id,
+        entity_type="user",
+        task_type="refresh",
     )
     
 @auth_router.get("/me", response_model=views.User)
