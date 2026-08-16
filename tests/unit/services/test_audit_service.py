@@ -1,4 +1,5 @@
 import asyncio
+from time import perf_counter
 from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import Request
@@ -32,7 +33,7 @@ def test_log_persists_expected_payload():
     audit = make_audit()
     audit._resolve_actor = AsyncMock(return_value="user")
 
-    request = make_request(request_id="req-123", start_time=1234.0)
+    request = make_request(request_id="req-123", start_time=perf_counter())
     asyncio.run(
         audit.log(
             request,
@@ -72,7 +73,7 @@ def test_log_swallows_insert_failure():
     audit.db_service.store_audit_log = AsyncMock(side_effect=Exception("db down"))
     audit._resolve_actor = AsyncMock(return_value="user")
 
-    request = make_request(request_id="req-123", start_time=1234.0)
+    request = make_request(request_id="req-123", start_time=perf_counter())
     asyncio.run(
         audit.log(request, user_id="user-1", entity_type="user", task_type="login")
     )
@@ -83,7 +84,7 @@ def test_log_swallows_insert_failure():
 def test_log_explicit_actor_skips_resolution():
     audit = make_audit()
 
-    request = make_request(request_id="req-123", start_time=1234.0)
+    request = make_request(request_id="req-123", start_time=perf_counter())
     asyncio.run(
         audit.log(
             request,
