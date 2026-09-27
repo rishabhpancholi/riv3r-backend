@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends
-from supabase import AsyncClient
 
-from app.api.profile import schemas
 from app.api.onboarding import views
+from app.api.profile import schemas
 from app.core import dependencies as deps
 from app.services import profile
 
@@ -17,10 +16,11 @@ async def update_organization(
     organization_id: str,
     organization: schemas.UpdateOrganization,
     user: dict = Depends(deps.get_current_user),
-    db: AsyncClient = Depends(deps.get_db),
+    profile_service: profile.ProfileService = Depends(deps.get_profile_service),
 ) -> dict:
-    profile_service = profile.ProfileService(db)
-    return await profile_service.update_organization(organization_id, organization, user)
+    return await profile_service.update_organization(
+        organization_id, organization, user
+    )
 
 
 @profile_router.patch(
@@ -30,9 +30,8 @@ async def update_organization(
 async def update_user(
     user_updates: schemas.UpdateUser,
     user: dict = Depends(deps.get_current_user),
-    db: AsyncClient = Depends(deps.get_db),
+    profile_service: profile.ProfileService = Depends(deps.get_profile_service),
 ) -> dict:
-    profile_service = profile.ProfileService(db)
     return await profile_service.update_user(user_updates, user)
 
 
@@ -44,7 +43,6 @@ async def update_resource(
     user_id: str,
     resource: schemas.UpdateResource,
     user: dict = Depends(deps.get_current_user),
-    db: AsyncClient = Depends(deps.get_db),
+    profile_service: profile.ProfileService = Depends(deps.get_profile_service),
 ) -> dict:
-    profile_service = profile.ProfileService(db)
     return await profile_service.update_resource(user_id, resource, user)

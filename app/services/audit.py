@@ -1,27 +1,38 @@
 import logging
 from time import perf_counter
-from typing import Optional, Literal
+from typing import Literal, Optional
 
 from fastapi import Request
-from supabase import AsyncClient
 
-from app.repositories import db_service
+from app.repositories.contracts import (
+    AuditLogRepository,
+    OrganizationRepository,
+    UserRepository,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class AuditService:
-    def __init__(self, db: AsyncClient):
-        self.db_service = db_service.DBRepository(db)
+    def __init__(
+        self,
+        *,
+        users: UserRepository,
+        organizations: OrganizationRepository,
+        audit_logs: AuditLogRepository,
+    ):
+        self.users = users
+        self.organizations = organizations
+        self.audit_logs = audit_logs
 
     async def _resolve_actor(self, user_id: str) -> Literal["user", "admin"]:
         try:
-            user = await self.db_service.get_user_with_id(user_id)
+            user = await self.users.get_user_with_id(user_id)
             if not user or user.get("is_resource"):
                 return "user"
 
             if user.get("org_id"):
-                org = await self.db_service.get_organization_by_id(user["org_id"])
+                org = await self.organizations.get_organization_by_id(user["org_id"])
                 if org and org.get("org_type") == "riv3r":
                     return "admin"
         except Exception:
@@ -59,7 +70,7 @@ class AuditService:
         }
 
         try:
-            await self.db_service.store_audit_log(audit_log)
+            await self.audit_logs.store_audit_log(audit_log)
         except Exception:
             logger.exception(
                 "Failed to persist audit log for task_type=%s user_id=%s",

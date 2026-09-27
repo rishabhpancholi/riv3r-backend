@@ -6,26 +6,26 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_name: str
-    app_version: str
-    app_mode: str
+    app_name: str = "RIV3R"
+    app_version: str = "0.0.1"
+    app_mode: str = "DEVELOPMENT"
 
-    database_url: str
+    database_url: str 
     database_key: str
 
-    cache_host: str
-    cache_port: int
-    cache_username: str
-    cache_password: str
-    cache_ttl: int
+    cache_host: str = "localhost"
+    cache_port: int = 6379
+    cache_username: str = "default"
+    cache_password: str 
+    cache_ttl: int = 300
 
-    jwt_secret_key: str
-    jwt_algorithm: str
-    jwt_access_token_expire_minutes: int
-    jwt_refresh_token_expire_days: int
+    jwt_secret_key: str  
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+    jwt_refresh_token_expire_days: int = 7
 
-    login_max_requests: int
-    login_window_seconds: int
+    login_max_requests: int = 5
+    login_window_seconds: int = 60
 
     @property
     def is_production(self) -> bool:

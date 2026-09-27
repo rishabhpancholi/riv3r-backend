@@ -1,11 +1,12 @@
 import asyncio
 from time import perf_counter
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 from fastapi import Request
 from starlette.datastructures import Headers
 
 from app.services.audit import AuditService
+from tests.repository_fakes import repository_mocks
 
 
 def make_request(**state):
@@ -21,11 +22,11 @@ def make_request(**state):
 
 
 def make_audit():
-    db = AsyncMock()
-    db_service = MagicMock()
-    db_service.store_audit_log = AsyncMock(return_value=[{}])
-    audit = AuditService(db)
-    audit.db_service = db_service
+    repo = repository_mocks()
+    repo.audit_logs.store_audit_log.return_value = {}
+    audit = AuditService(
+        users=repo.users, organizations=repo.organizations, audit_logs=repo.audit_logs
+    )
     return audit
 
 
@@ -43,7 +44,7 @@ def test_log_persists_expected_payload():
         )
     )
 
-    payload = audit.db_service.store_audit_log.call_args.args[0]
+    payload = audit.audit_logs.store_audit_log.call_args.args[0]
     assert payload["user_id"] == "user-1"
     assert payload["actor"] == "user"
     assert payload["entity_type"] == "user"
@@ -64,13 +65,13 @@ def test_log_without_start_time_has_none_time():
         audit.log(request, user_id="user-1", entity_type="user", task_type="login")
     )
 
-    payload = audit.db_service.store_audit_log.call_args.args[0]
+    payload = audit.audit_logs.store_audit_log.call_args.args[0]
     assert payload["time_taken_ms"] is None
 
 
 def test_log_swallows_insert_failure():
     audit = make_audit()
-    audit.db_service.store_audit_log = AsyncMock(side_effect=Exception("db down"))
+    audit.audit_logs.store_audit_log = AsyncMock(side_effect=Exception("db down"))
     audit._resolve_actor = AsyncMock(return_value="user")
 
     request = make_request(request_id="req-123", start_time=perf_counter())
@@ -78,7 +79,7 @@ def test_log_swallows_insert_failure():
         audit.log(request, user_id="user-1", entity_type="user", task_type="login")
     )
 
-    audit.db_service.store_audit_log.assert_awaited_once()
+    audit.audit_logs.store_audit_log.assert_awaited_once()
 
 
 def test_log_explicit_actor_skips_resolution():
@@ -95,13 +96,13 @@ def test_log_explicit_actor_skips_resolution():
         )
     )
 
-    payload = audit.db_service.store_audit_log.call_args.args[0]
+    payload = audit.audit_logs.store_audit_log.call_args.args[0]
     assert payload["actor"] == "admin"
 
 
 def test_resolve_actor_resource_user():
     audit = make_audit()
-    audit.db_service.get_user_with_id = AsyncMock(
+    audit.users.get_user_with_id = AsyncMock(
         return_value={"id": "u1", "is_resource": True}
     )
 
@@ -110,10 +111,10 @@ def test_resolve_actor_resource_user():
 
 def test_resolve_actor_riv3r_org_is_admin():
     audit = make_audit()
-    audit.db_service.get_user_with_id = AsyncMock(
+    audit.users.get_user_with_id = AsyncMock(
         return_value={"id": "u1", "is_resource": False, "org_id": "org-1"}
     )
-    audit.db_service.get_organization_by_id = AsyncMock(
+    audit.organizations.get_organization_by_id = AsyncMock(
         return_value={"id": "org-1", "org_type": "riv3r"}
     )
 
@@ -122,10 +123,10 @@ def test_resolve_actor_riv3r_org_is_admin():
 
 def test_resolve_actor_client_org_is_user():
     audit = make_audit()
-    audit.db_service.get_user_with_id = AsyncMock(
+    audit.users.get_user_with_id = AsyncMock(
         return_value={"id": "u1", "is_resource": False, "org_id": "org-1"}
     )
-    audit.db_service.get_organization_by_id = AsyncMock(
+    audit.organizations.get_organization_by_id = AsyncMock(
         return_value={"id": "org-1", "org_type": "client"}
     )
 
@@ -134,7 +135,7 @@ def test_resolve_actor_client_org_is_user():
 
 def test_resolve_actor_without_org_is_user():
     audit = make_audit()
-    audit.db_service.get_user_with_id = AsyncMock(
+    audit.users.get_user_with_id = AsyncMock(
         return_value={"id": "u1", "is_resource": False}
     )
 
@@ -143,6 +144,6 @@ def test_resolve_actor_without_org_is_user():
 
 def test_resolve_actor_db_failure_falls_back_to_user():
     audit = make_audit()
-    audit.db_service.get_user_with_id = AsyncMock(side_effect=Exception("db down"))
+    audit.users.get_user_with_id = AsyncMock(side_effect=Exception("db down"))
 
     assert asyncio.run(audit._resolve_actor("u1")) == "user"

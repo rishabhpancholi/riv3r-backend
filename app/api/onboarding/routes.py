@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, Response, Request, status
-from supabase import AsyncClient
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.api.onboarding import schemas, views
 from app.core import dependencies as deps
+from app.core.config import load_settings
 from app.services import onboarding
 from app.services.audit import AuditService
-from app.core.config import load_settings
 
 load_settings()
 
@@ -21,10 +20,12 @@ async def onboard_organization(
     req: Request,
     resp: Response,
     organization: schemas.OnboardOrganization,
-    db: AsyncClient = Depends(deps.get_db),
+    onboarding_service: onboarding.OnboardingService = Depends(
+        deps.get_onboarding_service
+    ),
+    audit_service: AuditService = Depends(deps.get_audit_service),
     _: None = Depends(deps.rate_limit_onboarding),
 ) -> dict:
-    onboarding_service = onboarding.OnboardingService(db)
     response = await onboarding_service.onboard_organization(organization)
 
     resp.set_cookie(
@@ -42,7 +43,6 @@ async def onboard_organization(
         samesite="lax",
     )
 
-    audit_service = AuditService(db)
     await audit_service.log(
         req,
         user_id=response["organization"]["owner"]["id"],
@@ -54,18 +54,20 @@ async def onboard_organization(
 
 
 @onboarding_router.post(
-    "/resource", 
-    response_model=views.Resource, 
+    "/resource",
+    response_model=views.Resource,
     status_code=status.HTTP_201_CREATED,
 )
 async def onboard_resource(
     req: Request,
     resp: Response,
     resource: schemas.OnboardResource,
-    db: AsyncClient = Depends(deps.get_db),
+    onboarding_service: onboarding.OnboardingService = Depends(
+        deps.get_onboarding_service
+    ),
+    audit_service: AuditService = Depends(deps.get_audit_service),
     _: None = Depends(deps.rate_limit_onboarding),
-)-> dict:
-    onboarding_service = onboarding.OnboardingService(db)
+) -> dict:
     response = await onboarding_service.onboard_resource(resource)
 
     resp.set_cookie(
@@ -83,7 +85,6 @@ async def onboard_resource(
         samesite="lax",
     )
 
-    audit_service = AuditService(db)
     await audit_service.log(
         req,
         user_id=response["resource"]["id"],
@@ -92,4 +93,3 @@ async def onboard_resource(
     )
 
     return response["resource"]
-    

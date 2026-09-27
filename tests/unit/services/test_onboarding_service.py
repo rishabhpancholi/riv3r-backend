@@ -1,13 +1,13 @@
 import asyncio
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.api.onboarding.schemas import OnboardOrganization, OnboardResource
 from app.core import exceptions
-from app.repositories import db_service
 from app.services import onboarding
+from tests.repository_fakes import repository_mocks
 
 
 def org_payload():
@@ -84,23 +84,29 @@ def resource_row():
 
 
 @pytest.fixture
-def repo(monkeypatch):
-    mock = MagicMock()
-    mock.check_email_in_db = AsyncMock(return_value=False)
-    mock.check_user_with_phone_number = AsyncMock(return_value=False)
-    mock.check_website_url_in_db = AsyncMock(return_value=False)
-    mock.store_organization = AsyncMock(return_value=org_row())
-    mock.store_user = AsyncMock(return_value=user_row())
-    mock.store_org_membership = AsyncMock()
-    mock.store_resource = AsyncMock(return_value=resource_row())
-    mock.store_refresh_token = AsyncMock()
+def repo():
+    mock = repository_mocks()
+    mock.duplicates.check_email_in_db = AsyncMock(return_value=False)
+    mock.users.check_user_with_phone_number = AsyncMock(return_value=False)
+    mock.duplicates.check_website_url_in_db = AsyncMock(return_value=False)
+    mock.organizations.store_organization = AsyncMock(return_value=org_row())
+    mock.users.store_user = AsyncMock(return_value=user_row())
+    mock.memberships.store_org_membership = AsyncMock()
+    mock.resources.store_resource = AsyncMock(return_value=resource_row())
+    mock.refresh_tokens.store_refresh_token = AsyncMock()
 
-    monkeypatch.setattr(db_service, "DBRepository", lambda db: mock)
     return mock
 
 
 def test_onboard_organization_success(repo):
-    service = onboarding.OnboardingService(AsyncMock())
+    service = onboarding.OnboardingService(
+        users=repo.users,
+        organizations=repo.organizations,
+        memberships=repo.memberships,
+        resources=repo.resources,
+        refresh_tokens=repo.refresh_tokens,
+        duplicates=repo.duplicates,
+    )
 
     result = asyncio.run(
         service.onboard_organization(OnboardOrganization(**org_payload()))
@@ -111,58 +117,88 @@ def test_onboard_organization_success(repo):
     assert result["organization"]["company_email"] == "acme@example.com"
     assert result["organization"]["owner"]["email"] == "owner@example.com"
 
-    stored_org = repo.store_organization.call_args[0][0]
+    stored_org = repo.organizations.store_organization.call_args[0][0]
     assert stored_org["company_email"] == "acme@example.com"
     assert stored_org["website_url"] == "https://acme.com/"
     assert stored_org["verification_status"] == "in_progress"
     assert "owner" not in stored_org
 
-    stored_user = repo.store_user.call_args[0][0]
+    stored_user = repo.users.store_user.call_args[0][0]
     assert stored_user["email"] == "owner@example.com"
     assert stored_user["is_resource"] is False
     assert stored_user["verification_status"] == "in_progress"
     assert stored_user["org_id"] == result["organization"]["id"]
     assert stored_user["password"] != "StrongPass1!"
 
-    repo.store_org_membership.assert_awaited_once()
-    repo.store_refresh_token.assert_awaited_once()
+    repo.memberships.store_org_membership.assert_awaited_once()
+    repo.refresh_tokens.store_refresh_token.assert_awaited_once()
 
 
 def test_onboard_organization_duplicate_company_email(repo):
-    repo.check_email_in_db = AsyncMock(return_value=True)
-    service = onboarding.OnboardingService(AsyncMock())
+    repo.duplicates.check_email_in_db = AsyncMock(return_value=True)
+    service = onboarding.OnboardingService(
+        users=repo.users,
+        organizations=repo.organizations,
+        memberships=repo.memberships,
+        resources=repo.resources,
+        refresh_tokens=repo.refresh_tokens,
+        duplicates=repo.duplicates,
+    )
 
     with pytest.raises(exceptions.DuplicateError):
         asyncio.run(service.onboard_organization(OnboardOrganization(**org_payload())))
 
-    repo.store_organization.assert_not_awaited()
+    repo.organizations.store_organization.assert_not_awaited()
 
 
 def test_onboard_organization_duplicate_phone_number(repo):
-    repo.check_user_with_phone_number = AsyncMock(return_value=True)
-    service = onboarding.OnboardingService(AsyncMock())
+    repo.users.check_user_with_phone_number = AsyncMock(return_value=True)
+    service = onboarding.OnboardingService(
+        users=repo.users,
+        organizations=repo.organizations,
+        memberships=repo.memberships,
+        resources=repo.resources,
+        refresh_tokens=repo.refresh_tokens,
+        duplicates=repo.duplicates,
+    )
 
     with pytest.raises(exceptions.DuplicateError):
         asyncio.run(service.onboard_organization(OnboardOrganization(**org_payload())))
 
-    repo.store_organization.assert_not_awaited()
+    repo.organizations.store_organization.assert_not_awaited()
 
 
 def test_onboard_organization_duplicate_website(repo):
-    repo.check_website_url_in_db = AsyncMock(return_value=True)
-    service = onboarding.OnboardingService(AsyncMock())
+    repo.duplicates.check_website_url_in_db = AsyncMock(return_value=True)
+    service = onboarding.OnboardingService(
+        users=repo.users,
+        organizations=repo.organizations,
+        memberships=repo.memberships,
+        resources=repo.resources,
+        refresh_tokens=repo.refresh_tokens,
+        duplicates=repo.duplicates,
+    )
 
     with pytest.raises(exceptions.DuplicateError):
         asyncio.run(service.onboard_organization(OnboardOrganization(**org_payload())))
 
-    repo.store_organization.assert_not_awaited()
+    repo.organizations.store_organization.assert_not_awaited()
 
 
 def test_onboard_resource_success(repo):
-    repo.store_user = AsyncMock(
-        return_value=user_row(email="dev@example.com", name="Jane Smith", is_resource=True)
+    repo.users.store_user = AsyncMock(
+        return_value=user_row(
+            email="dev@example.com", name="Jane Smith", is_resource=True
+        )
     )
-    service = onboarding.OnboardingService(AsyncMock())
+    service = onboarding.OnboardingService(
+        users=repo.users,
+        organizations=repo.organizations,
+        memberships=repo.memberships,
+        resources=repo.resources,
+        refresh_tokens=repo.refresh_tokens,
+        duplicates=repo.duplicates,
+    )
 
     result = asyncio.run(
         service.onboard_resource(OnboardResource(**resource_payload()))
@@ -173,24 +209,31 @@ def test_onboard_resource_success(repo):
     assert result["resource"]["email"] == "dev@example.com"
     assert result["resource"]["title"] == "Software Engineer"
 
-    stored_user = repo.store_user.call_args[0][0]
+    stored_user = repo.users.store_user.call_args[0][0]
     assert stored_user["is_resource"] is True
     assert stored_user["verification_status"] == "in_progress"
     assert stored_user["password"] != "StrongPass1!"
 
-    stored_resource = repo.store_resource.call_args[0][0]
+    stored_resource = repo.resources.store_resource.call_args[0][0]
     assert stored_resource["user_id"] == result["resource"]["id"]
     assert stored_resource["portfolio_url"] == "https://portfolio.com/"
     assert stored_resource["linked_in_url"] == "https://linkedin.com/in/janesmith"
 
-    repo.store_refresh_token.assert_awaited_once()
+    repo.refresh_tokens.store_refresh_token.assert_awaited_once()
 
 
 def test_onboard_resource_duplicate_email(repo):
-    repo.check_email_in_db = AsyncMock(return_value=True)
-    service = onboarding.OnboardingService(AsyncMock())
+    repo.duplicates.check_email_in_db = AsyncMock(return_value=True)
+    service = onboarding.OnboardingService(
+        users=repo.users,
+        organizations=repo.organizations,
+        memberships=repo.memberships,
+        resources=repo.resources,
+        refresh_tokens=repo.refresh_tokens,
+        duplicates=repo.duplicates,
+    )
 
     with pytest.raises(exceptions.DuplicateError):
         asyncio.run(service.onboard_resource(OnboardResource(**resource_payload())))
 
-    repo.store_user.assert_not_awaited()
+    repo.users.store_user.assert_not_awaited()

@@ -25,3 +25,8 @@ build-backend = "uv_build"
 dev = [
     "pytest-asyncio>=1.4.0",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: opt-in tests against dedicated Supabase and Redis instances",
+]

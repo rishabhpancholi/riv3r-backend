@@ -1,10 +1,10 @@
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 from app.api.auth.routes import deps
 from app.core import exceptions
-from app.repositories import cache_service, db_service
 from app.utils import jwt
+from tests.repository_fakes import MemoryRevocations, repository_mocks
 
 
 def login_payload(**overrides):
@@ -48,8 +48,7 @@ def test_login_success(client, monkeypatch):
 
     set_cookies = response.headers.get_list("set-cookie")
     assert any(
-        "access_token=login-access-token" in c and "HttpOnly" in c
-        for c in set_cookies
+        "access_token=login-access-token" in c and "HttpOnly" in c for c in set_cookies
     )
     assert any(
         "refresh_token=login-refresh-token" in c and "HttpOnly" in c
@@ -88,9 +87,7 @@ def test_logout_without_cookies(client, monkeypatch):
 
 
 def test_logout_success(client, monkeypatch):
-    monkeypatch.setattr(
-        "app.services.auth.AuthService.logout_user", AsyncMock()
-    )
+    monkeypatch.setattr("app.services.auth.AuthService.logout_user", AsyncMock())
 
     client.cookies.set("access_token", "x")
     client.cookies.set("refresh_token", "y")
@@ -138,22 +135,23 @@ def test_me_success(client, monkeypatch):
 
 def test_me_returns_fresh_user_from_db(client, monkeypatch):
     fresh_user = user_response()
-    repo_mock = MagicMock()
-    repo_mock.get_user_with_id = AsyncMock(
-        return_value={**fresh_user, "password": "hashed-password"}
+    repo = repository_mocks()
+    repo.users.get_user_with_id.return_value = {
+        **fresh_user,
+        "password": "hashed-password",
+    }
+    repo.memberships.get_org_membership.return_value = {
+        "organization_id": "some-org-id",
+        "is_owner": True,
+    }
+    repo.revocations.is_revoked.return_value = False
+    client.app.dependency_overrides[deps.get_users] = lambda: repo.users
+    client.app.dependency_overrides[deps.get_memberships] = lambda: repo.memberships
+    client.app.dependency_overrides[deps.get_revocations] = lambda: repo.revocations
+
+    client.cookies.set(
+        "access_token", jwt.create_token({"id": fresh_user["id"]}, "access")
     )
-    repo_mock.get_org_membership = AsyncMock(
-        return_value={"organization_id": "some-org-id", "is_owner": True}
-    )
-    monkeypatch.setattr(db_service, "DBRepository", lambda db: repo_mock)
-
-    cache_mock = MagicMock()
-    cache_mock.check_access_token_valid = AsyncMock(return_value=True)
-    monkeypatch.setattr(cache_service, "CacheRepository", lambda cache: cache_mock)
-
-    monkeypatch.setattr(jwt, "decode_token", lambda token: {"id": fresh_user["id"]})
-
-    client.cookies.set("access_token", "access-token")
     response = client.get("/api/auth/me")
 
     assert response.status_code == 200
@@ -162,4 +160,18 @@ def test_me_returns_fresh_user_from_db(client, monkeypatch):
     assert body["is_owner"] is True
     assert "password" not in body
 
-    repo_mock.get_user_with_id.assert_awaited_once()
+    repo.users.get_user_with_id.assert_awaited_once()
+
+
+def test_logout_revokes_access_for_subsequent_authentication(client):
+    revocations = MemoryRevocations()
+    client.app.dependency_overrides[deps.get_revocations] = lambda: revocations
+    access = jwt.create_token({"id": "user-1"}, "access")
+    refresh = jwt.create_token({"id": "user-1"}, "refresh")
+    client.cookies.set("access_token", access)
+    client.cookies.set("refresh_token", refresh)
+    response = client.post("/api/auth/logout")
+    assert response.status_code == 204
+    # Replay the cookie after logout, as a stolen token could be replayed.
+    client.cookies.set("access_token", access)
+    assert client.get("/api/auth/me").status_code == 401

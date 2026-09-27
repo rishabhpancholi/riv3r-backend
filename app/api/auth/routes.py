@@ -1,14 +1,13 @@
-from fastapi import APIRouter, Depends, Response, Request, status
-from supabase import AsyncClient
-from redis.asyncio import Redis
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.api.auth import schemas
 from app.api.onboarding import views
-from app.core import exceptions, dependencies as deps
+from app.core import dependencies as deps
+from app.core import exceptions
+from app.core.config import load_settings
 from app.services import auth
 from app.services.audit import AuditService
 from app.utils import jwt
-from app.core.config import load_settings
 
 load_settings()
 
@@ -16,17 +15,17 @@ auth_router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 
 @auth_router.post(
-    "/login", 
+    "/login",
     response_model=views.User,
 )
 async def login_user(
     req: Request,
     resp: Response,
     credentials: schemas.LoginUser,
-    db: AsyncClient = Depends(deps.get_db),
+    auth_service: auth.AuthService = Depends(deps.get_auth_service),
+    audit_service: AuditService = Depends(deps.get_audit_service),
     _: None = Depends(deps.rate_limit_login),
 ) -> dict:
-    auth_service = auth.AuthService(db)
     response = await auth_service.login_user(credentials)
 
     resp.set_cookie(
@@ -44,7 +43,6 @@ async def login_user(
         samesite="lax",
     )
 
-    audit_service = AuditService(db)
     await audit_service.log(
         req,
         user_id=response["user"]["id"],
@@ -54,17 +52,21 @@ async def login_user(
 
     return response["user"]
 
+
 @auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout_user(
     req: Request,
     resp: Response,
-    db: AsyncClient = Depends(deps.get_db),
-    cache: Redis = Depends(deps.get_cache),
+    auth_service: auth.AuthService = Depends(deps.get_auth_service),
+    audit_service: AuditService = Depends(deps.get_audit_service),
 ):
-    if not req.cookies or not req.cookies.get("access_token") or not req.cookies.get("refresh_token"):
+    if (
+        not req.cookies
+        or not req.cookies.get("access_token")
+        or not req.cookies.get("refresh_token")
+    ):
         raise exceptions.AuthorizationError(detail="Please make sure you are logged in")
 
-    auth_service = auth.AuthService(db, cache)
     await auth_service.logout_user(
         req.cookies["access_token"],
         req.cookies["refresh_token"],
@@ -85,11 +87,12 @@ async def logout_user(
 
     user_id = None
     try:
-        user_id = jwt.decode_token(req.cookies["access_token"])["id"]
+        user_id = jwt.decode_token(
+            req.cookies["access_token"], expected_type="access", allow_expired=True
+        )["id"]
     except Exception:
         pass
 
-    audit_service = AuditService(db)
     await audit_service.log(
         req,
         user_id=user_id,
@@ -97,19 +100,22 @@ async def logout_user(
         task_type="logout",
     )
 
+
 @auth_router.post("/refresh", status_code=status.HTTP_204_NO_CONTENT)
 async def refresh(
     req: Request,
     resp: Response,
-    db: AsyncClient = Depends(deps.get_db),
-    cache: Redis = Depends(deps.get_cache),
+    auth_service: auth.AuthService = Depends(deps.get_auth_service),
+    audit_service: AuditService = Depends(deps.get_audit_service),
 ):
-    if not req.cookies or not req.cookies.get("access_token") or not req.cookies.get("refresh_token"):
+    if (
+        not req.cookies
+        or not req.cookies.get("access_token")
+        or not req.cookies.get("refresh_token")
+    ):
         raise exceptions.AuthorizationError(detail="Please make sure you are logged in")
 
-    auth_service = auth.AuthService(db, cache)
-
-    response =  await auth_service.refresh(
+    response = await auth_service.refresh(
         req.cookies["refresh_token"],
         req.cookies["access_token"],
     )
@@ -124,20 +130,22 @@ async def refresh(
 
     user_id = None
     try:
-        user_id = jwt.decode_token(req.cookies["refresh_token"])["id"]
+        user_id = jwt.decode_token(
+            req.cookies["refresh_token"], expected_type="refresh"
+        )["id"]
     except Exception:
         pass
 
-    audit_service = AuditService(db)
     await audit_service.log(
         req,
         user_id=user_id,
         entity_type="user",
         task_type="refresh",
     )
-    
+
+
 @auth_router.get("/me", response_model=views.User)
 async def get_me(
     user: dict = Depends(deps.get_current_user),
-)-> dict:
+) -> dict:
     return user

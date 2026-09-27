@@ -1,28 +1,40 @@
 import asyncio
-from supabase import AsyncClient
-from redis.asyncio import Redis
 
 from app.api.auth import schemas
-from app.repositories import db_service, cache_service
 from app.core import exceptions
-from app.utils import password, jwt
+from app.repositories.contracts import (
+    AccessTokenRevocationStore,
+    RefreshTokenRepository,
+    UserRepository,
+)
+from app.utils import jwt, password
+
 
 class AuthService:
-    def __init__(self, db: AsyncClient, cache: Redis = None):
-        self.db_service = db_service.DBRepository(db)
+    def __init__(
+        self,
+        *,
+        users: UserRepository,
+        refresh_tokens: RefreshTokenRepository,
+        revocations: AccessTokenRevocationStore,
+    ):
+        self.users = users
+        self.refresh_tokens = refresh_tokens
+        self.revocations = revocations
 
-        if cache:
-            self.cache_service = cache_service.CacheRepository(cache)
+    async def login_user(self, credentials: schemas.LoginUser) -> dict:
+        existing_user = await self.users.get_user_with_email(credentials.email)
+        if not existing_user:
+            raise exceptions.AuthorizationError(
+                message="Invalid credentials", detail="Please check your credentials"
+            )
 
-    async def login_user(
-        self, credentials:schemas.LoginUser
-    )-> dict:
-        existing_user = await self.db_service.get_user_with_email(credentials.email)
-        if not existing_user: 
-            raise exceptions.AuthorizationError(message="Invalid credentials", detail="Please check your credentials")
-
-        if not password.verify_password(credentials.password, existing_user["password"]):
-            raise exceptions.AuthorizationError(message="Invalid credentials", detail="Please check your credentials")
+        if not password.verify_password(
+            credentials.password, existing_user["password"]
+        ):
+            raise exceptions.AuthorizationError(
+                message="Invalid credentials", detail="Please check your credentials"
+            )
 
         existing_user.pop("password")
 
@@ -31,40 +43,62 @@ class AuthService:
 
         hashed_refresh_token = jwt.hash_token(refresh_token)
 
-        await self.db_service.store_refresh_token(existing_user["id"], hashed_refresh_token)
+        await self.refresh_tokens.store_refresh_token(
+            existing_user["id"],
+            hashed_refresh_token,
+            expires_at=jwt.decode_token(refresh_token, expected_type="refresh")["exp"],
+        )
 
-        return {"access_token": access_token, "refresh_token": refresh_token, "user": existing_user}
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "user": existing_user,
+        }
 
-        
     async def logout_user(
-            self,
-            access_token: str,
-            refresh_token: str,
+        self,
+        access_token: str,
+        refresh_token: str,
     ):
-       hashed_refresh_token = jwt.hash_token(refresh_token)
-       hashed_access_token = jwt.hash_token(access_token)
-
-       db_ops = [
-           self.db_service.blacklist_refresh_token(hashed_refresh_token),
-           self.cache_service.blacklist_access_token(hashed_access_token),
-       ]
-
-       await asyncio.gather(*db_ops)
-
-    async def refresh(
-              self, 
-              refresh_token: str, 
-              access_token: str,
-    ):
+        access = jwt.decode_token(
+            access_token, expected_type="access", allow_expired=True
+        )
+        refresh = jwt.decode_token(
+            refresh_token, expected_type="refresh", allow_expired=True
+        )
+        if access["id"] != refresh["id"]:
+            raise exceptions.AuthorizationError(detail="Token users do not match")
         hashed_refresh_token = jwt.hash_token(refresh_token)
 
-        if not await self.db_service.check_refresh_token_valid(hashed_refresh_token):
-            raise exceptions.AuthorizationError(message="Invalid refresh token", detail="Please check your refresh token")
+        db_ops = [
+            self.refresh_tokens.blacklist_refresh_token(hashed_refresh_token),
+            self.revocations.revoke(access_token, expires_at=access["exp"]),
+        ]
 
-        await self.cache_service.blacklist_access_token(access_token)
+        await asyncio.gather(*db_ops)
 
-        payload = jwt.decode_token(refresh_token)
-        payload.pop("type")
+    async def refresh(
+        self,
+        refresh_token: str,
+        access_token: str,
+    ):
+        payload = jwt.decode_token(refresh_token, expected_type="refresh")
+        access = jwt.decode_token(
+            access_token, expected_type="access", allow_expired=True
+        )
+        if access["id"] != payload["id"]:
+            raise exceptions.AuthorizationError(detail="Token users do not match")
+        hashed_refresh_token = jwt.hash_token(refresh_token)
+
+        if not await self.refresh_tokens.check_refresh_token_valid(
+            hashed_refresh_token
+        ):
+            raise exceptions.AuthorizationError(
+                message="Invalid refresh token",
+                detail="Please check your refresh token",
+            )
+
+        await self.revocations.revoke(access_token, expires_at=access["exp"])
 
         fresh_access_token = jwt.create_token(payload, "access")
 
