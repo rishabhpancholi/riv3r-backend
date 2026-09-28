@@ -94,6 +94,18 @@ class SupabaseMembershipRepository:
         )
         return True if res.data else False
 
+    async def check_org_membership(
+        self, organization_id: str, user_id: str
+    ) -> bool:
+        organization_members = self.db.table("organization_members")
+        res = (
+            await organization_members.select("organization_id")
+            .eq("organization_id", organization_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return bool(res.data)
+
 class SupabaseResourceRepository:
     def __init__(self, db: AsyncClient):
         self.db = db
@@ -193,6 +205,44 @@ class SupabaseAuditLogRepository:
         audit_logs = self.db.table("audit_logs")
         res = await audit_logs.insert(audit_log).execute()
         return res.data[0]
+
+
+class SupabaseProjectRepository:
+    def __init__(self, db: AsyncClient):
+        self.db = db
+
+    async def store_project(self, project: dict) -> dict:
+        response = await self.db.table("projects").insert(project).execute()
+        return response.data[0]
+
+    async def get_project_by_id(self, project_id: str) -> dict | None:
+        response = (
+            await self.db.table("projects")
+            .select("*")
+            .eq("id", project_id)
+            .is_("deleted_at", "null")
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def publish_draft(
+        self,
+        project_id: str,
+        published_at: str,
+        *,
+        organization_id: str | None,
+    ) -> dict | None:
+        query = (
+            self.db.table("projects")
+            .update({"status": "published", "published_at": published_at})
+            .eq("id", project_id)
+            .eq("status", "draft")
+            .is_("deleted_at", "null")
+        )
+        if organization_id is not None:
+            query = query.eq("org_id", organization_id)
+        response = await query.execute()
+        return response.data[0] if response.data else None
 
 
 class SupabaseOnboardingRepository:

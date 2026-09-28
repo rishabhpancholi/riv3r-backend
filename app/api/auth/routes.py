@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.api.auth import schemas
 from app.api.onboarding import views
-from app.core import dependencies as deps
+from app.api.auth import dependencies as deps
+from app.core import dependencies as core_deps
 from app.core import exceptions
 from app.core.config import load_settings
 from app.services.auth import AuthService
@@ -23,7 +24,7 @@ async def login_user(
     resp: Response,
     credentials: schemas.LoginUser,
     auth_service: AuthService = Depends(deps.get_auth_service),
-    audit_service: AuditService = Depends(deps.get_audit_service),
+    audit_service: AuditService = Depends(core_deps.get_audit_service),
     _: None = Depends(deps.rate_limit_login),
 ) -> dict:
     response = await auth_service.login_user(credentials)
@@ -58,7 +59,7 @@ async def logout_user(
     req: Request,
     resp: Response,
     auth_service: AuthService = Depends(deps.get_auth_service),
-    audit_service: AuditService = Depends(deps.get_audit_service),
+    audit_service: AuditService = Depends(core_deps.get_audit_service),
 ):
     if (
         not req.cookies
@@ -106,7 +107,7 @@ async def refresh(
     req: Request,
     resp: Response,
     auth_service: AuthService = Depends(deps.get_auth_service),
-    audit_service: AuditService = Depends(deps.get_audit_service),
+    audit_service: AuditService = Depends(core_deps.get_audit_service),
 ):
     if (
         not req.cookies
@@ -146,6 +147,6 @@ async def refresh(
 
 @auth_router.get("/me", response_model=views.User)
 async def get_me(
-    user: dict = Depends(deps.get_current_user),
+    user: dict = Depends(core_deps.get_current_user),
 ) -> dict:
     return user

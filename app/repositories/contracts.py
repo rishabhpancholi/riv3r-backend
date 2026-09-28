@@ -23,6 +23,9 @@ class OrganizationRepository(Protocol):
 class MembershipRepository(Protocol):
     async def get_org_membership(self, user_id: str) -> dict | None: ...
     async def check_org_ownership(self, organization_id: str, user_id: str) -> bool: ...
+    async def check_org_membership(
+        self, organization_id: str, user_id: str
+    ) -> bool: ...
 
 
 class ResourceRepository(Protocol):
@@ -43,6 +46,18 @@ class RefreshTokenRepository(Protocol):
 class OnboardingRepository(Protocol):
     async def onboard_organization(self, params: dict) -> dict: ...
     async def onboard_resource(self, params: dict) -> dict: ...
+
+
+class ProjectRepository(Protocol):
+    async def store_project(self, project: dict) -> dict: ...
+    async def get_project_by_id(self, project_id: str) -> dict | None: ...
+    async def publish_draft(
+        self,
+        project_id: str,
+        published_at: str,
+        *,
+        organization_id: str | None,
+    ) -> dict | None: ...
 
 
 class AuditLogRepository(Protocol):

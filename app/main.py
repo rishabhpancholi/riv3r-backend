@@ -8,6 +8,7 @@ from app.core.exception_handlers import register_exception_handlers
 from app.db.connection import Connection
 from app.api.onboarding.routes import onboarding_router
 from app.api.auth.routes import auth_router
+from app.api.projects.routes import projects_router
 from app.middlewares import middlewares
 
 settings = load_settings()
@@ -36,7 +37,7 @@ app = FastAPI(
 
 register_exception_handlers(app)
 
-routers = [onboarding_router, auth_router]
+routers = [onboarding_router, auth_router, projects_router]
 for router in routers:
     app.include_router(router)
 

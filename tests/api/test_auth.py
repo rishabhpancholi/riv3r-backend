@@ -1,7 +1,7 @@
 import uuid
 from unittest.mock import AsyncMock
 
-from app.api.auth.routes import deps
+from app.core import dependencies as deps
 from app.core import exceptions
 from app.utils import jwt
 from tests.repository_fakes import MemoryRevocations, repository_mocks

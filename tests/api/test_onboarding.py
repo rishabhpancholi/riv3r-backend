@@ -1,7 +1,7 @@
 import uuid
 from unittest.mock import AsyncMock
 
-from app.core import dependencies as deps
+from app.api.onboarding import dependencies as deps
 from app.core import exceptions
 
 

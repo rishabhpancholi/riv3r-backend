@@ -5,7 +5,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.auth.routes import auth_router
+from app.api.auth import dependencies as auth_deps
+from app.api.onboarding import dependencies as onboarding_deps
 from app.api.onboarding.routes import onboarding_router
+from app.api.projects import dependencies as project_deps
+from app.api.projects.routes import projects_router
 from app.core import dependencies as deps
 from app.core.config import load_settings
 from app.core.exception_handlers import register_exception_handlers
@@ -28,12 +32,13 @@ def client():
 
     test_app.include_router(onboarding_router)
     test_app.include_router(auth_router)
+    test_app.include_router(projects_router)
     test_app.get("/api/health", tags=["Health"])(_health)
 
     test_app.dependency_overrides[deps.get_db] = lambda: AsyncMock()
     test_app.dependency_overrides[deps.get_cache] = lambda: AsyncMock()
-    test_app.dependency_overrides[deps.rate_limit_login] = lambda: None
-    test_app.dependency_overrides[deps.rate_limit_onboarding] = lambda: None
+    test_app.dependency_overrides[auth_deps.rate_limit_login] = lambda: None
+    test_app.dependency_overrides[onboarding_deps.rate_limit_onboarding] = lambda: None
 
     repo = repository_mocks()
     repo.revocations.is_revoked.return_value = False
@@ -41,8 +46,11 @@ def client():
     test_app.dependency_overrides[deps.get_organizations] = lambda: repo.organizations
     test_app.dependency_overrides[deps.get_memberships] = lambda: repo.memberships
     test_app.dependency_overrides[deps.get_resources] = lambda: repo.resources
+    test_app.dependency_overrides[project_deps.get_projects] = lambda: repo.projects
     test_app.dependency_overrides[deps.get_refresh_tokens] = lambda: repo.refresh_tokens
-    test_app.dependency_overrides[deps.get_onboarding_repository] = lambda: repo.onboarding
+    test_app.dependency_overrides[
+        onboarding_deps.get_onboarding_repository
+    ] = lambda: repo.onboarding
     test_app.dependency_overrides[deps.get_audit_logs] = lambda: repo.audit_logs
     test_app.dependency_overrides[deps.get_revocations] = lambda: repo.revocations
     test_app.dependency_overrides[deps.get_duplicates] = lambda: repo.duplicates

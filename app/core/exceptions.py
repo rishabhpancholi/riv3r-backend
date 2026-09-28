@@ -55,3 +55,12 @@ class NotFoundError(Riv3rException):
             detail=f"Please make sure the {entity} exists",
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+
+class StateError(Riv3rException):
+    def __init__(self, message: str, detail: str | None = None):
+        super().__init__(
+            message=message,
+            detail=detail or message,
+            status_code=status.HTTP_409_CONFLICT,
+        )

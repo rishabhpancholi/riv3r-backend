@@ -9,6 +9,7 @@ from app.repositories.supabase import (
     SupabaseMembershipRepository,
     SupabaseOnboardingRepository,
     SupabaseOrganizationRepository,
+    SupabaseProjectRepository,
     SupabaseRefreshTokenRepository,
     SupabaseResourceRepository,
     SupabaseUserRepository,
@@ -19,7 +20,7 @@ def database(*responses):
     db = MagicMock()
     query = MagicMock()
     db.table.return_value = query
-    for method in ("select", "eq", "insert", "update"):
+    for method in ("select", "eq", "insert", "update", "is_"):
         getattr(query, method).return_value = query
     query.execute = AsyncMock(
         side_effect=[SimpleNamespace(data=rows) for rows in responses]
@@ -48,6 +49,67 @@ async def test_resource_update_filters_user_id():
     query.eq.assert_called_once_with("user_id", "user-a")
     query.update.assert_called_once_with({"title": "Updated"})
     assert result == {"title": "Updated"}
+
+
+@pytest.mark.asyncio
+async def test_project_insert_returns_created_record():
+    project = {"title": "New project", "org_id": "org-a"}
+    db, query = database([{"id": "project-a", **project}])
+
+    result = await SupabaseProjectRepository(db).store_project(project)
+
+    db.table.assert_called_once_with("projects")
+    query.insert.assert_called_once_with(project)
+    assert result == {"id": "project-a", **project}
+
+
+@pytest.mark.asyncio
+async def test_client_publish_is_atomic_and_tenant_scoped():
+    published = {"id": "project-a", "status": "published"}
+    db, query = database([published])
+
+    result = await SupabaseProjectRepository(db).publish_draft(
+        "project-a",
+        "2026-09-29T12:00:00+00:00",
+        organization_id="org-a",
+    )
+
+    assert result == published
+    assert [call.args for call in query.eq.call_args_list] == [
+        ("id", "project-a"),
+        ("status", "draft"),
+        ("org_id", "org-a"),
+    ]
+    query.is_.assert_called_once_with("deleted_at", "null")
+
+
+@pytest.mark.asyncio
+async def test_cross_tenant_publish_omits_organization_filter():
+    db, query = database([{"id": "project-a", "status": "published"}])
+
+    await SupabaseProjectRepository(db).publish_draft(
+        "project-a",
+        "2026-09-29T12:00:00+00:00",
+        organization_id=None,
+    )
+
+    assert [call.args for call in query.eq.call_args_list] == [
+        ("id", "project-a"),
+        ("status", "draft"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_membership_check_filters_organization_and_user():
+    db, query = database([{"organization_id": "org-a"}])
+
+    assert await SupabaseMembershipRepository(db).check_org_membership(
+        "org-a", "user-a"
+    )
+    assert [call.args for call in query.eq.call_args_list] == [
+        ("organization_id", "org-a"),
+        ("user_id", "user-a"),
+    ]
 
 
 @pytest.mark.asyncio

@@ -97,6 +97,10 @@ def test_onboard_organization_uses_one_atomic_rpc(repo):
         jwt.decode_token(result["access_token"], expected_type="access")["id"]
         == params["p_owner_id"]
     )
+    assert (
+        jwt.decode_token(result["access_token"], expected_type="access")["org_id"]
+        == params["p_organization_id"]
+    )
 
 
 def test_onboard_resource_uses_one_atomic_rpc(repo):

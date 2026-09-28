@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from redis.asyncio import Redis
 
 from app.api.auth.routes import auth_router
+from app.api.auth import dependencies as auth_deps
 from app.core import dependencies as deps
 from app.core.exception_handlers import register_exception_handlers
 from app.utils import password
@@ -68,7 +69,7 @@ async def live_auth(live_redis):
         app.include_router(auth_router)
         app.dependency_overrides[deps.get_db] = lambda: db
         app.dependency_overrides[deps.get_cache] = lambda: live_redis.client
-        app.dependency_overrides[deps.rate_limit_login] = lambda: None
+        app.dependency_overrides[auth_deps.rate_limit_login] = lambda: None
         # HTTPS allows the real secure cookies in production-mode test configs.
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="https://integration.test"
