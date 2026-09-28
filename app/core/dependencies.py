@@ -11,7 +11,6 @@ from app.services.audit import AuditService
 from app.services.auth import AuthService
 from app.services.duplicates import DuplicateChecker
 from app.services.onboarding import OnboardingService
-from app.services.profile import ProfileService
 from app.utils import jwt
 from supabase import AsyncClient
 
@@ -50,6 +49,12 @@ def get_refresh_tokens(
     return repositories.SupabaseRefreshTokenRepository(db)
 
 
+def get_onboarding_repository(
+    db: AsyncClient = Depends(get_db),
+) -> contracts.OnboardingRepository:
+    return repositories.SupabaseOnboardingRepository(db)
+
+
 def get_audit_logs(db: AsyncClient = Depends(get_db)) -> contracts.AuditLogRepository:
     return repositories.SupabaseAuditLogRepository(db)
 
@@ -86,37 +91,12 @@ def get_auth_service(
 
 
 def get_onboarding_service(
-    users: contracts.UserRepository = Depends(get_users),
-    organizations: contracts.OrganizationRepository = Depends(get_organizations),
-    memberships: contracts.MembershipRepository = Depends(get_memberships),
-    resources: contracts.ResourceRepository = Depends(get_resources),
-    refresh_tokens: contracts.RefreshTokenRepository = Depends(get_refresh_tokens),
-    duplicates: DuplicateChecker = Depends(get_duplicates),
+    onboarding_repository: contracts.OnboardingRepository = Depends(
+        get_onboarding_repository
+    ),
 ) -> OnboardingService:
-    return OnboardingService(
-        users=users,
-        organizations=organizations,
-        memberships=memberships,
-        resources=resources,
-        refresh_tokens=refresh_tokens,
-        duplicates=duplicates,
-    )
+    return OnboardingService(onboarding_repository=onboarding_repository)
 
-
-def get_profile_service(
-    users: contracts.UserRepository = Depends(get_users),
-    organizations: contracts.OrganizationRepository = Depends(get_organizations),
-    memberships: contracts.MembershipRepository = Depends(get_memberships),
-    resources: contracts.ResourceRepository = Depends(get_resources),
-    duplicates: DuplicateChecker = Depends(get_duplicates),
-) -> ProfileService:
-    return ProfileService(
-        users=users,
-        organizations=organizations,
-        memberships=memberships,
-        resources=resources,
-        duplicates=duplicates,
-    )
 
 
 def get_audit_service(

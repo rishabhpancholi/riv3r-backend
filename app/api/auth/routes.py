@@ -5,7 +5,7 @@ from app.api.onboarding import views
 from app.core import dependencies as deps
 from app.core import exceptions
 from app.core.config import load_settings
-from app.services import auth
+from app.services.auth import AuthService
 from app.services.audit import AuditService
 from app.utils import jwt
 
@@ -22,7 +22,7 @@ async def login_user(
     req: Request,
     resp: Response,
     credentials: schemas.LoginUser,
-    auth_service: auth.AuthService = Depends(deps.get_auth_service),
+    auth_service: AuthService = Depends(deps.get_auth_service),
     audit_service: AuditService = Depends(deps.get_audit_service),
     _: None = Depends(deps.rate_limit_login),
 ) -> dict:
@@ -57,7 +57,7 @@ async def login_user(
 async def logout_user(
     req: Request,
     resp: Response,
-    auth_service: auth.AuthService = Depends(deps.get_auth_service),
+    auth_service: AuthService = Depends(deps.get_auth_service),
     audit_service: AuditService = Depends(deps.get_audit_service),
 ):
     if (
@@ -105,7 +105,7 @@ async def logout_user(
 async def refresh(
     req: Request,
     resp: Response,
-    auth_service: auth.AuthService = Depends(deps.get_auth_service),
+    auth_service: AuthService = Depends(deps.get_auth_service),
     audit_service: AuditService = Depends(deps.get_audit_service),
 ):
     if (

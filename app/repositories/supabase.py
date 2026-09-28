@@ -3,6 +3,9 @@
 from datetime import UTC, datetime
 
 from supabase import AsyncClient
+from postgrest.exceptions import APIError
+
+from app.core import exceptions
 
 
 class SupabaseUserRepository:
@@ -29,11 +32,6 @@ class SupabaseUserRepository:
         res = await users.update(user).eq("id", user_id).execute()
         return res.data[0]
 
-    async def store_user(self, user: dict) -> dict:
-        users = self.db.table("users")
-        res = await users.insert(user).execute()
-        return res.data[0]
-
     async def email_exists(self, value: str) -> bool:
         result = await self.db.table("users").select("*").eq("email", value).execute()
         return bool(result.data)
@@ -55,11 +53,6 @@ class SupabaseOrganizationRepository:
         res = (
             await organizations.update(organization).eq("id", organization_id).execute()
         )
-        return res.data[0]
-
-    async def store_organization(self, organization: dict) -> dict:
-        organizations = self.db.table("organizations")
-        res = await organizations.insert(organization).execute()
         return res.data[0]
 
     async def email_exists(self, value: str) -> bool:
@@ -101,13 +94,6 @@ class SupabaseMembershipRepository:
         )
         return True if res.data else False
 
-    async def store_org_membership(self, organization_id: str, user_id: str) -> None:
-        organization_members = self.db.table("organization_members")
-        await organization_members.insert(
-            {"organization_id": organization_id, "user_id": user_id, "is_owner": True}
-        ).execute()
-
-
 class SupabaseResourceRepository:
     def __init__(self, db: AsyncClient):
         self.db = db
@@ -120,11 +106,6 @@ class SupabaseResourceRepository:
     async def update_by_user_id(self, user_id: str, resource: dict) -> dict:
         resources = self.db.table("resources")
         res = await resources.update(resource).eq("user_id", user_id).execute()
-        return res.data[0]
-
-    async def store_resource(self, resource: dict) -> dict:
-        resources = self.db.table("resources")
-        res = await resources.insert(resource).execute()
         return res.data[0]
 
     async def portfolio_exists(self, value: str) -> bool:
@@ -212,3 +193,37 @@ class SupabaseAuditLogRepository:
         audit_logs = self.db.table("audit_logs")
         res = await audit_logs.insert(audit_log).execute()
         return res.data[0]
+
+
+class SupabaseOnboardingRepository:
+    _duplicate_entities = {
+        "company_email": "company email",
+        "owner_email": "user email",
+        "email": "user email",
+        "phone_number": "phone number",
+        "website_url": "website url",
+        "portfolio_url": "portfolio url",
+        "linked_in_url": "linkedin url",
+    }
+
+    def __init__(self, db: AsyncClient):
+        self.db = db
+
+    async def _execute(self, function: str, params: dict) -> dict:
+        try:
+            response = await self.db.rpc(function, params).execute()
+        except APIError as error:
+            field = error.details
+            if error.code == "23505" and field in self._duplicate_entities:
+                value = params[f"p_{field}"]
+                raise exceptions.DuplicateError(
+                    self._duplicate_entities[field], value
+                ) from error
+            raise
+        return response.data
+
+    async def onboard_organization(self, params: dict) -> dict:
+        return await self._execute("onboard_organization_atomic", params)
+
+    async def onboard_resource(self, params: dict) -> dict:
+        return await self._execute("onboard_resource_atomic", params)

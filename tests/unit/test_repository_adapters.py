@@ -7,6 +7,7 @@ import pytest
 from app.repositories.supabase import (
     SupabaseAuditLogRepository,
     SupabaseMembershipRepository,
+    SupabaseOnboardingRepository,
     SupabaseOrganizationRepository,
     SupabaseRefreshTokenRepository,
     SupabaseResourceRepository,
@@ -180,3 +181,24 @@ async def test_duplicate_sources_query_their_own_fields(adapter, method, table, 
     assert await getattr(repo, method)("absent") is False
     assert db.table.call_args.args == (table,)
     assert query.eq.call_args_list[0].args == (column, "value")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method,function",
+    [
+        ("onboard_organization", "onboard_organization_atomic"),
+        ("onboard_resource", "onboard_resource_atomic"),
+    ],
+)
+async def test_onboarding_repository_uses_atomic_rpc(method, function):
+    db = MagicMock()
+    rpc = MagicMock()
+    rpc.execute = AsyncMock(return_value=SimpleNamespace(data={"id": "created"}))
+    db.rpc.return_value = rpc
+    params = {"p_user_id": "user-a"}
+
+    result = await getattr(SupabaseOnboardingRepository(db), method)(params)
+
+    db.rpc.assert_called_once_with(function, params)
+    assert result == {"id": "created"}

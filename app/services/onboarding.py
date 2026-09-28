@@ -1,15 +1,8 @@
-import asyncio
+from datetime import UTC, datetime
+from uuid import uuid4
 
 from app.api.onboarding import schemas
-from app.core import exceptions
-from app.repositories.contracts import (
-    MembershipRepository,
-    OrganizationRepository,
-    RefreshTokenRepository,
-    ResourceRepository,
-    UserRepository,
-)
-from app.services.duplicates import DuplicateChecker
+from app.repositories.contracts import OnboardingRepository
 from app.utils import jwt, password
 
 
@@ -17,90 +10,53 @@ class OnboardingService:
     def __init__(
         self,
         *,
-        users: UserRepository,
-        organizations: OrganizationRepository,
-        memberships: MembershipRepository,
-        resources: ResourceRepository,
-        refresh_tokens: RefreshTokenRepository,
-        duplicates: DuplicateChecker,
+        onboarding_repository: OnboardingRepository,
     ):
-        self.users = users
-        self.organizations = organizations
-        self.memberships = memberships
-        self.resources = resources
-        self.refresh_tokens = refresh_tokens
-        self.duplicates = duplicates
+        self.onboarding_repository = onboarding_repository
 
     async def onboard_organization(
         self, organization: schemas.OnboardOrganization
     ) -> dict:
-        db_checks = [
-            self.duplicates.check_email_in_db(organization.company_email),
-            self.duplicates.check_email_in_db(organization.owner.email),
-        ]
-        if organization.owner.phone_number:
-            db_checks.append(
-                self.users.check_user_with_phone_number(organization.owner.phone_number)
-            )
-        if organization.website_url:
-            db_checks.append(
-                self.duplicates.check_website_url_in_db(organization.website_url)
-            )
-
-        checks = await asyncio.gather(
-            *db_checks,
-        )
-
-        if checks[0]:
-            raise exceptions.DuplicateError("company email", organization.company_email)
-        if checks[1]:
-            raise exceptions.DuplicateError("user email", organization.email)
-        if len(checks) >= 3 and checks[2]:
-            raise exceptions.DuplicateError(
-                "phone number", organization.owner.phone_number
-            )
-        if len(checks) >= 4 and checks[3]:
-            raise exceptions.DuplicateError("website url", organization.website_url)
-
         hashed_password = password.hash_password(organization.owner.password)
-
-        organization_dict = organization.model_dump(exclude={"owner"}, mode="json")
-        organization_dict.update({"verification_status": "in_progress"})
-        owner_dict = organization.owner.model_dump(exclude={"first_name", "last_name"})
-        owner_dict.update(
-            {
-                "password": hashed_password,
-                "is_resource": False,
-                "verification_status": "in_progress",
-            }
-        )
-
-        org = await self.organizations.store_organization(organization_dict)
-        owner_dict.update({"org_id": org["id"]})
-        owner = await self.users.store_user(owner_dict)
-        org.update({"owner": owner})
-
-        owner.pop("password")
-
-        token_data = owner | {"org_id": org["id"], "is_owner": True}
+        organization_id = str(uuid4())
+        owner_id = str(uuid4())
+        token_data = {
+            "id": owner_id,
+            "email": str(organization.owner.email),
+            "name": organization.owner.name,
+            "phone_number": organization.owner.phone_number,
+            "is_resource": False,
+            "verification_status": "in_progress",
+            "org_id": organization_id,
+            "is_owner": True,
+        }
 
         access_token = jwt.create_token(token_data, "access")
         refresh_token = jwt.create_token(token_data, "refresh")
-
-        hashed_refresh_token = jwt.hash_token(refresh_token)
-
-        insert_tasks = [
-            self.memberships.store_org_membership(org["id"], owner["id"]),
-            self.refresh_tokens.store_refresh_token(
-                owner["id"],
-                hashed_refresh_token,
-                expires_at=jwt.decode_token(refresh_token, expected_type="refresh")[
-                    "exp"
-                ],
-            ),
-        ]
-
-        await asyncio.gather(*insert_tasks)
+        expires_at = jwt.decode_token(refresh_token, expected_type="refresh")["exp"]
+        org = await self.onboarding_repository.onboard_organization(
+            {
+                "p_organization_id": organization_id,
+                "p_company_email": str(organization.company_email),
+                "p_registered_name": organization.registered_name,
+                "p_website_url": (
+                    str(organization.website_url)
+                    if organization.website_url
+                    else None
+                ),
+                "p_industry": organization.industry,
+                "p_org_type": organization.org_type.value,
+                "p_owner_id": owner_id,
+                "p_owner_email": str(organization.owner.email),
+                "p_owner_password": hashed_password,
+                "p_owner_name": organization.owner.name,
+                "p_owner_phone_number": organization.owner.phone_number,
+                "p_refresh_token": jwt.hash_token(refresh_token),
+                "p_refresh_expires_at": datetime.fromtimestamp(
+                    expires_at, UTC
+                ).isoformat(),
+            }
+        )
 
         return {
             "organization": org,
@@ -109,88 +65,42 @@ class OnboardingService:
         }
 
     async def onboard_resource(self, resource: schemas.OnboardResource) -> dict:
-        db_checks = [
-            self.duplicates.check_email_in_db(resource.email),
-        ]
-        if resource.phone_number:
-            db_checks.append(
-                self.users.check_user_with_phone_number(resource.phone_number)
-            )
-        if resource.portfolio_url:
-            db_checks.append(
-                self.duplicates.check_website_url_in_db(resource.portfolio_url)
-            )
-        if resource.linked_in_url:
-            db_checks.append(
-                self.duplicates.check_website_url_in_db(resource.linked_in_url)
-            )
-
-        checks = await asyncio.gather(
-            *db_checks,
-        )
-
-        if checks[0]:
-            raise exceptions.DuplicateError("user email", resource.email)
-        if len(checks) >= 2 and checks[1]:
-            raise exceptions.DuplicateError("phone number", resource.phone_number)
-        if len(checks) >= 3 and checks[2]:
-            raise exceptions.DuplicateError("portfolio url", resource.portfolio_url)
-        if len(checks) >= 4 and checks[3]:
-            raise exceptions.DuplicateError("linkedin url", resource.linked_in_url)
-
         hashed_password = password.hash_password(resource.password)
-
-        user_dict = resource.model_dump(
-            exclude={
-                "title",
-                "skills",
-                "bio",
-                "location",
-                "first_name",
-                "last_name",
-                "experience_years",
-                "portfolio_url",
-                "linked_in_url",
-            }
-        )
-        user_dict.update(
+        user_id = str(uuid4())
+        token_data = {
+            "id": user_id,
+            "email": str(resource.email),
+            "name": resource.name,
+            "phone_number": resource.phone_number,
+            "is_resource": True,
+            "verification_status": "in_progress",
+        }
+        access_token = jwt.create_token(token_data, "access")
+        refresh_token = jwt.create_token(token_data, "refresh")
+        expires_at = jwt.decode_token(refresh_token, expected_type="refresh")["exp"]
+        user_resource = await self.onboarding_repository.onboard_resource(
             {
-                "password": hashed_password,
-                "is_resource": True,
-                "verification_status": "in_progress",
+                "p_user_id": user_id,
+                "p_email": str(resource.email),
+                "p_password": hashed_password,
+                "p_name": resource.name,
+                "p_phone_number": resource.phone_number,
+                "p_title": resource.title,
+                "p_bio": resource.bio,
+                "p_location": resource.location,
+                "p_skills": resource.skills,
+                "p_experience_years": resource.experience_years,
+                "p_portfolio_url": (
+                    str(resource.portfolio_url) if resource.portfolio_url else None
+                ),
+                "p_linked_in_url": (
+                    str(resource.linked_in_url) if resource.linked_in_url else None
+                ),
+                "p_refresh_token": jwt.hash_token(refresh_token),
+                "p_refresh_expires_at": datetime.fromtimestamp(
+                    expires_at, UTC
+                ).isoformat(),
             }
-        )
-        resource_dict = resource.model_dump(
-            exclude={
-                "email",
-                "first_name",
-                "last_name",
-                "name",
-                "password",
-                "phone_number",
-            },
-            mode="json",
-        )
-
-        user = await self.users.store_user(user_dict)
-        resource_dict.update({"user_id": user["id"]})
-        reso = await self.resources.store_resource(resource_dict)
-
-        fields = ["id", "created_at", "updated_at", "deleted_at"]
-        reso = {k: v for k, v in reso.items() if k not in fields}
-        user_resource = user | reso
-
-        user_resource.pop("password")
-
-        access_token = jwt.create_token(user_resource, "access")
-        refresh_token = jwt.create_token(user_resource, "refresh")
-
-        hashed_refresh_token = jwt.hash_token(refresh_token)
-
-        await self.refresh_tokens.store_refresh_token(
-            user_resource["id"],
-            hashed_refresh_token,
-            expires_at=jwt.decode_token(refresh_token, expected_type="refresh")["exp"],
         )
 
         return {

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from app.api.onboarding import schemas, views
 from app.core import dependencies as deps
 from app.core.config import load_settings
-from app.services import onboarding
+from app.services.onboarding import OnboardingService
 from app.services.audit import AuditService
 
 load_settings()
@@ -20,7 +20,7 @@ async def onboard_organization(
     req: Request,
     resp: Response,
     organization: schemas.OnboardOrganization,
-    onboarding_service: onboarding.OnboardingService = Depends(
+    onboarding_service: OnboardingService = Depends(
         deps.get_onboarding_service
     ),
     audit_service: AuditService = Depends(deps.get_audit_service),
@@ -62,7 +62,7 @@ async def onboard_resource(
     req: Request,
     resp: Response,
     resource: schemas.OnboardResource,
-    onboarding_service: onboarding.OnboardingService = Depends(
+    onboarding_service: OnboardingService = Depends(
         deps.get_onboarding_service
     ),
     audit_service: AuditService = Depends(deps.get_audit_service),

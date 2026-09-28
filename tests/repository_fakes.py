@@ -22,6 +22,9 @@ def repository_mocks():
         refresh_tokens=create_autospec(
             contracts.RefreshTokenRepository, instance=True, spec_set=True
         ),
+        onboarding=create_autospec(
+            contracts.OnboardingRepository, instance=True, spec_set=True
+        ),
         audit_logs=create_autospec(
             contracts.AuditLogRepository, instance=True, spec_set=True
         ),
