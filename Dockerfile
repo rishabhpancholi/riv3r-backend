@@ -15,7 +15,8 @@ WORKDIR /app
 COPY --from=uv /uv /uvx /bin/
 
 # Install dependencies separately so application-only changes reuse this layer.
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock ./
+COPY docs/README.md ./docs/README.md
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
 

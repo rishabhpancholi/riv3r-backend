@@ -7,6 +7,8 @@ commit dates recorded in Git.
 
 - Pointed the project metadata at `docs/README.md` so package builds and dependency
   synchronization no longer fail because of the absent root-level README.
+- Updated the Docker build inputs and ignore rules to include that package README,
+  allowing remote container builds to install the project successfully.
 
 ## 2026-09-29 — Projects and organization permissions
 
