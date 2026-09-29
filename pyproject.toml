@@ -2,7 +2,7 @@
 name = "riv3r"
 version = "0.1.0"
 description = "Add your description here"
-readme = "README.md"
+readme = "docs/README.md"
 authors = [
     { email = "pancholi.rishabh@tantranzm.com" }
 ]
