@@ -3,6 +3,11 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-09-29 — Packaging metadata
+
+- Pointed the project metadata at `docs/README.md` so package builds and dependency
+  synchronization no longer fail because of the absent root-level README.
+
 ## 2026-09-29 — Projects and organization permissions
 
 - Added the projects schema, pgvector-ready embeddings, lifecycle states, indexes,
