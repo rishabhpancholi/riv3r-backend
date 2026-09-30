@@ -37,11 +37,19 @@ app = FastAPI(
 
 register_exception_handlers(app)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 routers = [onboarding_router, auth_router, projects_router]
 for router in routers:
     app.include_router(router)
 
-middlewares: list[BaseHTTPMiddleware] = [CORSMiddleware, middlewares.RequestIDMiddleware, middlewares.RequestTimeMiddleware]
+middlewares: list[BaseHTTPMiddleware] = [middlewares.RequestIDMiddleware, middlewares.RequestTimeMiddleware]
 for middleware in middlewares:
     app.add_middleware(middleware)
 

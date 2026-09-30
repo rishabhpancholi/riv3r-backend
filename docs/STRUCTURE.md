@@ -69,7 +69,8 @@ time-of-check/time-of-use bugs.
 
 ### `app/core`
 
-- `config.py` loads cached environment-backed settings.
+- `config.py` loads cached environment-backed settings, including the
+  JSON-configured list of browser origins allowed by CORS.
 - `dependencies.py` exposes universal connections, shared repositories,
   authentication, revocations, audit wiring, and duplicate-check composition.
 - `permissions.py` defines async permission checkers and cross-tenant decisions.
