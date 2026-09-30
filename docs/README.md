@@ -71,10 +71,13 @@ CACHE_PORT=6379
 CACHE_USERNAME=default
 CACHE_PASSWORD=your-redis-password
 JWT_SECRET_KEY=use-a-strong-private-secret
+CORS_ALLOWED_ORIGINS=["http://localhost:3000"]
 ```
 
 Optional settings include `APP_MODE`, JWT lifetimes, cache TTL, and login rate
-limits. Never expose `DATABASE_KEY` or `JWT_SECRET_KEY` to a browser client.
+limits. `CORS_ALLOWED_ORIGINS` is a JSON list of browser origins permitted to call
+the API with credentials. Never expose `DATABASE_KEY` or `JWT_SECRET_KEY` to a
+browser client.
 
 Apply migrations using the configured Supabase workflow, then start the API:
 
