@@ -3,6 +3,11 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-10-01 — Configurable CORS origins
+
+- Added an environment-backed allowlist of browser origins and configured CORS to
+  support credentialed API requests from those origins.
+
 ## 2026-09-29 — Packaging metadata
 
 - Pointed the project metadata at `docs/README.md` so package builds and dependency
