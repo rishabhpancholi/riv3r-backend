@@ -16,7 +16,7 @@ must succeed or fail as one unit.
 - Cookie-based access and refresh JWT authentication
 - Login, refresh, logout, Redis-backed access-token revocation, and audit logs
 - Organization-aware permissions with cross-tenant access for RIV3R users
-- Draft project creation and race-safe project publishing
+- Draft project creation and race-safe project publishing with best-effort audits
 - Backend-only Supabase tables protected from `anon` and `authenticated` roles
 - Unit, API, database-policy, and opt-in live integration tests
 

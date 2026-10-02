@@ -12,6 +12,10 @@ def test_cors_allowed_origins_are_loaded_from_environment(monkeypatch):
         database_url="https://example.supabase.co",
         database_key="database-key",
         cache_password="cache-password",
+        llm_api_key="llm-key",
+        llm_model="llm-model",
+        embeddings_api_key="embeddings-key",
+        embeddings_model="embeddings-model",
         jwt_secret_key="jwt-secret",
     )
 

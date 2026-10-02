@@ -88,6 +88,8 @@ schema and code remain authoritative and this file must be corrected.
 - Only non-deleted drafts can be published. Publishing uses a conditional update on
   project ID, draft status, deletion state, and—when applicable—tenant ID, so two
   concurrent publish requests cannot both succeed.
+- Successful project creation and publishing attempt best-effort audit writes after
+  the project mutation; audit persistence failure does not change the API result.
 - Project embeddings are nullable, have no fixed vector dimension, and are currently
   left empty by the API.
 
