@@ -41,7 +41,7 @@ Each feature package owns its HTTP boundary:
   feature-specific rate limits. It must depend on shared providers from
   `app.core.dependencies` rather than duplicating connection/authentication logic.
 
-Current features are `auth`, `onboarding`, and `projects`.
+Current features are `auth`, `onboarding`, `projects`, and `users`.
 
 ### `app/services`
 
@@ -51,6 +51,8 @@ Services implement use cases and domain sequencing:
 - `onboarding.py` hashes secrets, constructs identity claims, and invokes atomic
   onboarding repositories.
 - `projects.py` enforces project membership, tenant, and lifecycle behavior.
+- `users.py` authorizes organization directories, validates cached payloads, and
+  coordinates cache-aside reads.
 - `audit.py` resolves actor type and writes best-effort audit events.
 - `duplicates.py` composes independent existence checks concurrently.
 
@@ -61,7 +63,8 @@ Supabase/Redis clients or import FastAPI request dependencies.
 
 - `contracts.py` contains narrow async `Protocol` interfaces consumed by services.
 - `supabase.py` implements PostgreSQL/PostgREST storage operations and RPC calls.
-- `redis.py` implements access-token revocation.
+- `redis.py` implements access-token revocation and fail-open organization-directory
+  caching.
 
 Repository methods own query construction and storage-specific response handling.
 Business authorization belongs in services/permission checkers, but every mutation
@@ -161,6 +164,19 @@ Rules:
 4. If no row updates, the service re-reads once to classify a concurrent deletion,
    tenant change, or lifecycle conflict accurately.
 5. The route attempts a best-effort `project_publish` audit after success.
+
+### Organization user directory
+
+1. `get_current_user` authenticates and reloads the caller.
+2. Organization-level permission allows client and agency users in their own tenant
+   and grants RIV3R cross-tenant access.
+3. A non-RIV3R cross-tenant request is rejected before any cache or database read;
+   an explicit RIV3R target must identify an existing organization.
+4. The service reads `org_users:{org_id}` from Redis, validates cached records, and
+   falls back to a safe-field Supabase query on a miss or cache failure.
+5. Supabase results are cached for `CACHE_TTL`. Future user create, update, delete,
+   restore, or organization-transfer workflows must evict every affected key after
+   successful persistence; direct database changes currently rely on TTL expiry.
 
 ## Permissions
 

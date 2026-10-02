@@ -16,6 +16,7 @@ must succeed or fail as one unit.
 - Cookie-based access and refresh JWT authentication
 - Login, refresh, logout, Redis-backed access-token revocation, and audit logs
 - Organization-aware permissions with cross-tenant access for RIV3R users
+- Tenant-isolated organization user directories with Redis read-through caching
 - Draft project creation and race-safe project publishing with best-effort audits
 - Backend-only Supabase tables protected from `anon` and `authenticated` roles
 - Unit, API, database-policy, and opt-in live integration tests
@@ -27,6 +28,7 @@ must succeed or fail as one unit.
 | Health | `GET /api/health` |
 | Onboarding | `POST /api/onboarding/organization`, `POST /api/onboarding/resource` |
 | Authentication | `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me` |
+| Users | `GET /api/users` |
 | Projects | `POST /api/projects`, `POST /api/projects/{project_id}/publish` |
 
 Interactive OpenAPI documentation is available at `/docs` outside production.
@@ -91,6 +93,12 @@ or Voyage models directly.
 limits. `CORS_ALLOWED_ORIGINS` is a JSON list of browser origins permitted to call
 the API with credentials. Never expose `DATABASE_KEY` or `JWT_SECRET_KEY` to a
 browser client.
+
+`GET /api/users` returns the authenticated client or agency organization's active
+non-resource users. RIV3R users can request another organization with
+`?org_id=<uuid>`. Results are cached by organization for `CACHE_TTL`; Redis failures
+fall back to Supabase. Until user mutation APIs are introduced, direct database
+changes can remain cached until that TTL expires.
 
 Apply migrations using the configured Supabase workflow, then start the API:
 

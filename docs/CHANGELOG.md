@@ -3,6 +3,15 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-10-02 — Organization user directory
+
+- Added a tenant-isolated `GET /api/users` directory for client and agency users,
+  with controlled cross-tenant access for RIV3R.
+- Added safe-field Supabase queries and fail-open Redis cache-aside reads scoped by
+  organization, with bounded TTL staleness until user mutation APIs are introduced.
+- Added API, service, cache, authorization, and repository coverage without audit
+  logging for the read-only endpoint.
+
 ## 2026-10-02 — Provider-neutral AI clients
 
 - Added process-wide Anthropic and Voyage AI adapters behind application-owned LLM

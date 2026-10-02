@@ -20,12 +20,35 @@ def database(*responses):
     db = MagicMock()
     query = MagicMock()
     db.table.return_value = query
-    for method in ("select", "eq", "insert", "update", "is_"):
+    for method in ("select", "eq", "insert", "update", "is_", "order"):
         getattr(query, method).return_value = query
     query.execute = AsyncMock(
         side_effect=[SimpleNamespace(data=rows) for rows in responses]
     )
     return db, query
+
+
+@pytest.mark.asyncio
+async def test_list_organization_users_selects_only_public_active_org_users():
+    rows = [{"id": "user-a", "name": "Alex"}]
+    db, query = database(rows)
+
+    result = await SupabaseUserRepository(db).list_organization_users("org-a")
+
+    assert result == rows
+    query.select.assert_called_once_with(
+        "id,name,email,phone_number,verification_status,org_id,"
+        "created_at,updated_at"
+    )
+    assert [call.args for call in query.eq.call_args_list] == [
+        ("org_id", "org-a"),
+        ("is_resource", False),
+    ]
+    query.is_.assert_called_once_with("deleted_at", "null")
+    assert [call.args for call in query.order.call_args_list] == [
+        ("name",),
+        ("id",),
+    ]
 
 
 @pytest.mark.asyncio

@@ -34,6 +34,9 @@ def repository_mocks():
         revocations=create_autospec(
             contracts.AccessTokenRevocationStore, instance=True, spec_set=True
         ),
+        organization_users_cache=create_autospec(
+            contracts.OrganizationUsersCache, instance=True, spec_set=True
+        ),
         duplicates=create_autospec(DuplicateChecker, instance=True, spec_set=True),
     )
     repositories.users.get_user_with_id.return_value = None
@@ -42,6 +45,7 @@ def repository_mocks():
     repositories.memberships.get_org_membership.return_value = None
     repositories.resources.get_resource_by_user_id.return_value = None
     repositories.revocations.is_revoked.return_value = False
+    repositories.organization_users_cache.get.return_value = None
     return repositories
 
 

@@ -35,6 +35,10 @@ schema and code remain authoritative and this file must be corrected.
 - Organization membership is unique by `(organization_id, user_id)` and ownership
   is represented by non-null `is_owner`.
 - Each user can have at most one resource profile (`resources.user_id` is unique).
+- Organization user directories contain only non-resource, non-deleted users from
+  the requested organization and never expose password or deletion fields.
+- Client and agency users may view only their own organization directory. RIV3R
+  organization users may view another existing organization's directory.
 
 ## Onboarding atomicity
 
@@ -104,6 +108,9 @@ schema and code remain authoritative and this file must be corrected.
   `anon`, and `authenticated` have no table access; the backend uses `service_role`.
 - Because `service_role` bypasses RLS, every FastAPI query must enforce authorization
   explicitly and must repeat security-critical predicates in mutation queries.
+- Organization-directory authorization is completed before its organization-scoped
+  Redis cache is read. Cache failures fall back to PostgreSQL, and entries may be
+  stale for at most `CACHE_TTL` until user mutation APIs add active invalidation.
 
 ## Validation rules
 

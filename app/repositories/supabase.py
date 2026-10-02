@@ -32,6 +32,22 @@ class SupabaseUserRepository:
         res = await users.update(user).eq("id", user_id).execute()
         return res.data[0]
 
+    async def list_organization_users(self, organization_id: str) -> list[dict]:
+        response = (
+            await self.db.table("users")
+            .select(
+                "id,name,email,phone_number,verification_status,org_id,"
+                "created_at,updated_at"
+            )
+            .eq("org_id", organization_id)
+            .eq("is_resource", False)
+            .is_("deleted_at", "null")
+            .order("name")
+            .order("id")
+            .execute()
+        )
+        return response.data
+
     async def email_exists(self, value: str) -> bool:
         result = await self.db.table("users").select("*").eq("email", value).execute()
         return bool(result.data)

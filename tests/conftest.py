@@ -10,6 +10,8 @@ from app.api.onboarding import dependencies as onboarding_deps
 from app.api.onboarding.routes import onboarding_router
 from app.api.projects import dependencies as project_deps
 from app.api.projects.routes import projects_router
+from app.api.users import dependencies as users_deps
+from app.api.users.routes import users_router
 from app.core import dependencies as deps
 from app.core.config import load_settings
 from app.core.exception_handlers import register_exception_handlers
@@ -33,6 +35,7 @@ def client():
     test_app.include_router(onboarding_router)
     test_app.include_router(auth_router)
     test_app.include_router(projects_router)
+    test_app.include_router(users_router)
     test_app.get("/api/health", tags=["Health"])(_health)
 
     test_app.dependency_overrides[deps.get_db] = lambda: AsyncMock()
@@ -54,6 +57,9 @@ def client():
     test_app.dependency_overrides[deps.get_audit_logs] = lambda: repo.audit_logs
     test_app.dependency_overrides[deps.get_revocations] = lambda: repo.revocations
     test_app.dependency_overrides[deps.get_duplicates] = lambda: repo.duplicates
+    test_app.dependency_overrides[
+        users_deps.get_organization_users_cache
+    ] = lambda: AsyncMock()
 
     with TestClient(test_app) as client:
         yield client
