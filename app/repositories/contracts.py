@@ -57,6 +57,9 @@ class ProjectRepository(Protocol):
         project_id: str,
         published_at: str,
         *,
+        embedding: list[float] | None,
+        embedding_model: str | None,
+        embedded_at: str | None,
         organization_id: str | None,
     ) -> dict | None: ...
 

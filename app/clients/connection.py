@@ -35,6 +35,10 @@ class Connection:
             api_key=self.settings.embeddings_api_key,
             model=self.settings.embeddings_model,
         )
+        self.fallback_embeddings: EmbeddingsClient = VoyageEmbeddingsClient(
+            api_key=self.settings.embeddings_api_key,
+            model=self.settings.embeddings_fallback_model,
+        )
         self._initialized = True
 
     async def close(self) -> None:

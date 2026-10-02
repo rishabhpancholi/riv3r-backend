@@ -94,6 +94,9 @@ async def test_client_publish_is_atomic_and_tenant_scoped():
     result = await SupabaseProjectRepository(db).publish_draft(
         "project-a",
         "2026-09-29T12:00:00+00:00",
+        embedding=[0.1] * 1024,
+        embedding_model="voyage-4",
+        embedded_at="2026-09-29T12:00:00+00:00",
         organization_id="org-a",
     )
 
@@ -104,6 +107,15 @@ async def test_client_publish_is_atomic_and_tenant_scoped():
         ("org_id", "org-a"),
     ]
     query.is_.assert_called_once_with("deleted_at", "null")
+    query.update.assert_called_once_with(
+        {
+            "status": "published",
+            "published_at": "2026-09-29T12:00:00+00:00",
+            "project_embeddings": [0.1] * 1024,
+            "embedding_model": "voyage-4",
+            "embedded_at": "2026-09-29T12:00:00+00:00",
+        }
+    )
 
 
 @pytest.mark.asyncio
@@ -113,9 +125,21 @@ async def test_cross_tenant_publish_omits_organization_filter():
     await SupabaseProjectRepository(db).publish_draft(
         "project-a",
         "2026-09-29T12:00:00+00:00",
+        embedding=None,
+        embedding_model=None,
+        embedded_at=None,
         organization_id=None,
     )
 
+    query.update.assert_called_once_with(
+        {
+            "status": "published",
+            "published_at": "2026-09-29T12:00:00+00:00",
+            "project_embeddings": None,
+            "embedding_model": None,
+            "embedded_at": None,
+        }
+    )
     assert [call.args for call in query.eq.call_args_list] == [
         ("id", "project-a"),
         ("status", "draft"),

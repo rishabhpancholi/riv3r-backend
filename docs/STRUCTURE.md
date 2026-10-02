@@ -19,10 +19,10 @@ PostgreSQL
 ```
 
 `app.main` creates one Supabase async client, one Redis client, one Anthropic-backed
-LLM adapter, and one Voyage-backed embedding adapter for the process. They are
-stored on `app.state.connection` during the FastAPI lifespan. Closeable resources
-are released on shutdown; repository instances are lightweight request-scoped
-wrappers around the shared storage clients.
+LLM adapter, and primary/fallback Voyage embedding adapters for the process. They
+are stored on `app.state.connection` during the FastAPI lifespan. Closeable
+resources are released on shutdown; repository instances are lightweight
+request-scoped wrappers around the shared storage clients.
 
 ## Package responsibilities
 
@@ -50,7 +50,11 @@ Services implement use cases and domain sequencing:
 - `auth.py` handles login, refresh, and logout token behavior.
 - `onboarding.py` hashes secrets, constructs identity claims, and invokes atomic
   onboarding repositories.
-- `projects.py` enforces project membership, tenant, and lifecycle behavior.
+- `projects.py` enforces project membership, tenant, lifecycle, and
+  publication-time embedding behavior.
+- `project_embeddings.py` builds canonical project documents, validates Voyage
+  vectors, and performs one primary-model attempt followed by one lower-tier model
+  attempt.
 - `users.py` authorizes organization directories, validates cached payloads, and
   coordinates cache-aside reads.
 - `audit.py` resolves actor type and writes best-effort audit events.
@@ -152,18 +156,24 @@ Rules:
    access and skips it.
 4. The service derives organization and creator IDs from the current user. Draft
    creation relies on SQL defaults; immediate publication supplies status/time.
-5. The repository inserts and returns the project row.
-6. The route attempts a best-effort `project_create` audit after success.
+5. Immediate publication attempts the primary Voyage model, then the lower-tier
+   Voyage fallback; draft creation skips embedding generation entirely.
+6. The repository inserts the project and any embedding provenance in one write.
+7. The route attempts a best-effort `project_create` audit after success.
 
 ### Project publishing
 
 1. The project lookup and permission checkers run concurrently.
 2. The service applies 404, permission, tenant, and lifecycle checks in that order.
-3. The repository performs a conditional update requiring a non-deleted draft; a
-   client mutation also requires its organization ID.
-4. If no row updates, the service re-reads once to classify a concurrent deletion,
+3. After validation, the service attempts the primary Voyage model and then the
+   lower-tier Voyage fallback once. Both failures are logged but do not block
+   publication.
+4. The repository atomically writes publication and available embedding fields in a
+   conditional update requiring a non-deleted draft; a client mutation also
+   requires its organization ID.
+5. If no row updates, the service re-reads once to classify a concurrent deletion,
    tenant change, or lifecycle conflict accurately.
-5. The route attempts a best-effort `project_publish` audit after success.
+6. The route attempts a best-effort `project_publish` audit after success.
 
 ### Organization user directory
 
@@ -199,6 +209,8 @@ removes the need for state predicates in the final database mutation.
 - PostgreSQL and Redis cannot share an ACID transaction. Cross-store operations must
   be idempotent and designed for retry/reconciliation.
 - Audit writes are intentionally separate and best-effort.
+- Primary and fallback embeddings are both 1,024-dimensional Voyage 4-series
+  vectors; provenance remains stored for observability and future re-embedding.
 
 ## Error contract
 

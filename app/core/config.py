@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     llm_model: str
     embeddings_api_key: str
     embeddings_model: str
+    embeddings_fallback_model: str = "voyage-4-lite"
 
     jwt_secret_key: str  
     jwt_algorithm: str = "HS256"

@@ -3,6 +3,16 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-10-02 — Published project embeddings
+
+- Added 1,024-dimensional Voyage embeddings for immediate and draft-to-published
+  project transitions while leaving drafts unembedded.
+- Added one `voyage-4-lite` fallback attempt after `voyage-4`, with fail-open
+  publication when both hosted embedding attempts fail.
+- Added embedding model/timestamp provenance, fixed pgvector dimensions, atomic
+  publication persistence, and database constraint coverage without backfilling
+  existing published projects.
+
 ## 2026-10-02 — Organization user directory
 
 - Added a tenant-isolated `GET /api/users` directory for client and agency users,

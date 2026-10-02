@@ -246,11 +246,21 @@ class SupabaseProjectRepository:
         project_id: str,
         published_at: str,
         *,
+        embedding: list[float] | None,
+        embedding_model: str | None,
+        embedded_at: str | None,
         organization_id: str | None,
     ) -> dict | None:
+        update = {
+            "status": "published",
+            "published_at": published_at,
+            "project_embeddings": embedding,
+            "embedding_model": embedding_model,
+            "embedded_at": embedded_at,
+        }
         query = (
             self.db.table("projects")
-            .update({"status": "published", "published_at": published_at})
+            .update(update)
             .eq("id", project_id)
             .eq("status", "draft")
             .is_("deleted_at", "null")

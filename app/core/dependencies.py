@@ -28,6 +28,10 @@ def get_embeddings(request: Request) -> EmbeddingsClient:
     return request.app.state.connection.embeddings
 
 
+def get_fallback_embeddings(request: Request) -> EmbeddingsClient:
+    return request.app.state.connection.fallback_embeddings
+
+
 def get_users(db: AsyncClient = Depends(get_db)) -> contracts.UserRepository:
     return repositories.SupabaseUserRepository(db)
 

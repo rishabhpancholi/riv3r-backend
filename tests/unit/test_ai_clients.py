@@ -81,10 +81,14 @@ async def test_voyage_client_uses_retrieval_input_types() -> None:
     assert sdk.embed.await_args_list[0].kwargs == {
         "model": "voyage-test",
         "input_type": "query",
+        "output_dimension": 1024,
+        "output_dtype": "float",
     }
     assert sdk.embed.await_args_list[1].kwargs == {
         "model": "voyage-test",
         "input_type": "document",
+        "output_dimension": 1024,
+        "output_dtype": "float",
     }
 
 

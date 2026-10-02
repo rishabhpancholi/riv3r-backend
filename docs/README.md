@@ -18,6 +18,7 @@ must succeed or fail as one unit.
 - Organization-aware permissions with cross-tenant access for RIV3R users
 - Tenant-isolated organization user directories with Redis read-through caching
 - Draft project creation and race-safe project publishing with best-effort audits
+- Publication-time project embeddings with a lower-tier Voyage fallback
 - Backend-only Supabase tables protected from `anon` and `authenticated` roles
 - Unit, API, database-policy, and opt-in live integration tests
 
@@ -44,6 +45,10 @@ Organization and resource onboarding use one PostgreSQL function per workflow,
 so related users, organizations, memberships, profiles, and initial refresh tokens
 commit or roll back together. Project publishing uses a conditional update on the
 `draft` state, preventing two concurrent publish requests from both succeeding.
+Published projects normally receive a 1,024-dimensional `voyage-4` document
+embedding. If that request fails or returns an invalid vector, the backend makes one
+attempt with `voyage-4-lite`. Drafts are not embedded, and publication remains
+available with a null vector if both hosted attempts fail.
 
 See [TRUTH.md](TRUTH.md) for the current business and database invariants, and
 [STRUCTURE.md](STRUCTURE.md) for the low-level design. The dated development
@@ -77,6 +82,7 @@ LLM_API_KEY=your-anthropic-api-key
 LLM_MODEL=claude-haiku-4-5-20251001
 EMBEDDINGS_API_KEY=your-voyage-api-key
 EMBEDDINGS_MODEL=voyage-4
+EMBEDDINGS_FALLBACK_MODEL=voyage-4-lite
 JWT_SECRET_KEY=use-a-strong-private-secret
 CORS_ALLOWED_ORIGINS=["http://localhost:3000"]
 ```

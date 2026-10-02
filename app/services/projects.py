@@ -6,6 +6,7 @@ from app.api.projects import schemas
 from app.core import exceptions
 from app.core.permissions import PermissionChecker
 from app.repositories.contracts import MembershipRepository, ProjectRepository
+from app.services.project_embeddings import ProjectEmbeddingGenerator
 
 
 class ProjectService:
@@ -14,9 +15,11 @@ class ProjectService:
         *,
         projects: ProjectRepository,
         memberships: MembershipRepository,
+        embedding_generator: ProjectEmbeddingGenerator,
     ):
         self.projects = projects
         self.memberships = memberships
+        self.embedding_generator = embedding_generator
 
     async def create_project(
         self,
@@ -47,9 +50,16 @@ class ProjectService:
             "created_by_user_id": current_user["id"],
         }
         if project.publish_also:
+            embedding = await self.embedding_generator.generate(project_data)
             project_data.update(
                 status="published", published_at=datetime.now(UTC).isoformat()
             )
+            if embedding is not None:
+                project_data.update(
+                    project_embeddings=embedding.vector,
+                    embedding_model=embedding.model,
+                    embedded_at=datetime.now(UTC).isoformat(),
+                )
 
         return await self.projects.store_project(project_data)
 
@@ -89,9 +99,14 @@ class ProjectService:
         if project["status"] != "draft":
             raise exceptions.StateError("Only draft projects can be published")
 
+        embedding = await self.embedding_generator.generate(project)
+        embedded_at = datetime.now(UTC).isoformat() if embedding is not None else None
         published = await self.projects.publish_draft(
             project_id,
             datetime.now(UTC).isoformat(),
+            embedding=embedding.vector if embedding is not None else None,
+            embedding_model=embedding.model if embedding is not None else None,
+            embedded_at=embedded_at,
             organization_id=(
                 None if has_cross_tenant_access else current_user["org_id"]
             ),

@@ -94,8 +94,15 @@ schema and code remain authoritative and this file must be corrected.
   concurrent publish requests cannot both succeed.
 - Successful project creation and publishing attempt best-effort audit writes after
   the project mutation; audit persistence failure does not change the API result.
-- Project embeddings are nullable, have no fixed vector dimension, and are currently
-  left empty by the API.
+- Draft projects do not have embeddings. When a project is published, the API makes
+  one 1,024-dimensional document-embedding attempt with the configured primary
+  Voyage model, then one attempt with the configured lower-tier Voyage fallback.
+- Embedding generation is fail-open: a project may still be published with null
+  embedding fields if both strategies fail. When a vector is present, its model and
+  embedding timestamp are required; all three fields are otherwise null together.
+- The primary model is `voyage-4` and the fallback is `voyage-4-lite`; both produce
+  compatible 1,024-dimensional Voyage 4-series vectors.
+- Existing published projects are not backfilled by the embedding migration.
 
 ## Authorization and data access
 

@@ -52,6 +52,7 @@ async def test_connection_initializes_once_and_closes_clients() -> None:
     cache = SimpleNamespace(aclose=AsyncMock())
     llm = SimpleNamespace(close=AsyncMock())
     embeddings = object()
+    fallback_embeddings = object()
 
     with (
         patch(
@@ -64,7 +65,7 @@ async def test_connection_initializes_once_and_closes_clients() -> None:
         ) as create_llm,
         patch(
             "app.clients.connection.VoyageEmbeddingsClient",
-            return_value=embeddings,
+            side_effect=[embeddings, fallback_embeddings],
         ) as create_embeddings,
     ):
         connection = Connection(_settings())
@@ -75,14 +76,20 @@ async def test_connection_initializes_once_and_closes_clients() -> None:
         assert connection.cache is cache
         assert connection.llm is llm
         assert connection.embeddings is embeddings
+        assert connection.fallback_embeddings is fallback_embeddings
         create_db.assert_awaited_once()
         create_cache.assert_called_once()
         create_llm.assert_called_once_with(
             api_key="llm-secret", model="claude-test"
         )
-        create_embeddings.assert_called_once_with(
-            api_key="embeddings-secret", model="voyage-test"
-        )
+        assert create_embeddings.call_args_list[0].kwargs == {
+            "api_key": "embeddings-secret",
+            "model": "voyage-test",
+        }
+        assert create_embeddings.call_args_list[1].kwargs == {
+            "api_key": "embeddings-secret",
+            "model": "voyage-4-lite",
+        }
 
         await connection.close()
 
@@ -93,16 +100,22 @@ async def test_connection_initializes_once_and_closes_clients() -> None:
 def test_ai_dependencies_return_shared_instances() -> None:
     llm = MagicMock()
     embeddings = MagicMock()
+    fallback_embeddings = MagicMock()
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                connection=SimpleNamespace(llm=llm, embeddings=embeddings)
+                connection=SimpleNamespace(
+                    llm=llm,
+                    embeddings=embeddings,
+                    fallback_embeddings=fallback_embeddings,
+                )
             )
         )
     )
 
     assert dependencies.get_llm(request) is llm
     assert dependencies.get_embeddings(request) is embeddings
+    assert dependencies.get_fallback_embeddings(request) is fallback_embeddings
 
 
 @pytest.mark.asyncio
