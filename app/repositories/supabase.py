@@ -90,6 +90,25 @@ class SupabaseOrganizationRepository:
         return bool(result.data)
 
 
+class SupabasePermissionRepository:
+    def __init__(self, db: AsyncClient):
+        self.db = db
+
+    async def has_effective_permission(
+        self, user_id: str, permission_key: str
+    ) -> bool:
+        response = await self.db.rpc(
+            "user_has_permission",
+            {"p_user_id": user_id, "p_permission_key": permission_key},
+        ).execute()
+        return response.data is True
+
+    async def list_effective_permissions(self, user_id: str) -> list[str]:
+        response = await self.db.rpc(
+            "list_user_permissions", {"p_user_id": user_id}
+        ).execute()
+        return [row["permission_key"] for row in response.data]
+
 class SupabaseMembershipRepository:
     def __init__(self, db: AsyncClient):
         self.db = db

@@ -9,6 +9,7 @@ from app.repositories.supabase import (
     SupabaseMembershipRepository,
     SupabaseOnboardingRepository,
     SupabaseOrganizationRepository,
+    SupabasePermissionRepository,
     SupabaseProjectRepository,
     SupabaseRefreshTokenRepository,
     SupabaseResourceRepository,
@@ -311,3 +312,45 @@ async def test_onboarding_repository_uses_atomic_rpc(method, function):
 
     db.rpc.assert_called_once_with(function, params)
     assert result == {"id": "created"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value,expected", [(True, True), (False, False)])
+async def test_permission_repository_uses_effective_permission_rpc(value, expected):
+    db = MagicMock()
+    rpc = MagicMock()
+    rpc.execute = AsyncMock(return_value=SimpleNamespace(data=value))
+    db.rpc.return_value = rpc
+
+    result = await SupabasePermissionRepository(db).has_effective_permission(
+        "user-a", "projects.create"
+    )
+
+    assert result is expected
+    db.rpc.assert_called_once_with(
+        "user_has_permission",
+        {"p_user_id": "user-a", "p_permission_key": "projects.create"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_permission_repository_lists_effective_permission_keys():
+    db = MagicMock()
+    rpc = MagicMock()
+    rpc.execute = AsyncMock(
+        return_value=SimpleNamespace(
+            data=[
+                {"permission_key": "projects.create"},
+                {"permission_key": "projects.view"},
+                {"permission_key": "users.view"},
+            ]
+        )
+    )
+    db.rpc.return_value = rpc
+
+    result = await SupabasePermissionRepository(db).list_effective_permissions(
+        "user-a"
+    )
+
+    assert result == ["projects.create", "projects.view", "users.view"]
+    db.rpc.assert_called_once_with("list_user_permissions", {"p_user_id": "user-a"})

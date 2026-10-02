@@ -15,7 +15,7 @@ must succeed or fail as one unit.
 - Atomic onboarding through PostgreSQL RPC functions
 - Cookie-based access and refresh JWT authentication
 - Login, refresh, logout, Redis-backed access-token revocation, and audit logs
-- Organization-aware permissions with cross-tenant access for RIV3R users
+- Dependency-aware user permissions with cross-tenant access for authorized RIV3R users
 - Tenant-isolated organization user directories with Redis read-through caching
 - Draft project creation and race-safe project publishing with best-effort audits
 - Publication-time project embeddings with a lower-tier Voyage fallback
@@ -101,10 +101,23 @@ the API with credentials. Never expose `DATABASE_KEY` or `JWT_SECRET_KEY` to a
 browser client.
 
 `GET /api/users` returns the authenticated client or agency organization's active
-non-resource users. RIV3R users can request another organization with
+non-resource users when the caller has `users.view`. RIV3R users with that
+permission can request another organization with
 `?org_id=<uuid>`. Results are cached by organization for `CACHE_TTL`; Redis failures
 fall back to Supabase. Until user mutation APIs are introduced, direct database
 changes can remain cached until that TTL expires.
+
+Project creation requires `projects.create`, project publishing requires
+`projects.publish`, and the organization directory requires `users.view`.
+`projects.create` automatically includes `projects.view` and `users.view`;
+`projects.publish` includes `projects.view`. Client users receive the project
+creation and publication grants, RIV3R users receive all seeded permissions, and
+agency users currently receive only `projects.view`. Permission decisions are read
+from PostgreSQL on every protected request and are not cached.
+
+`GET /api/auth/me` includes a sorted `permissions` array containing all direct and
+inherited permissions currently effective for the authenticated user. Resource
+users receive an empty array.
 
 Apply migrations using the configured Supabase workflow, then start the API:
 
@@ -123,7 +136,8 @@ uv run pytest tests/unit tests/api -q
 Live Supabase and Redis tests are opt-in. See
 [tests/integration/README.md](tests/integration/README.md) for their isolated
 credentials and commands. Database access and RLS deployment checks are documented
-in [supabase/RLS.md](supabase/RLS.md).
+in [supabase/RLS.md](../supabase/RLS.md), including the standalone permission
+schema assertions.
 
 ## Security notes
 

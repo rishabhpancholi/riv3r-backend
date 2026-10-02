@@ -124,13 +124,28 @@ def test_me_without_token(client, monkeypatch):
 
 def test_me_success(client, monkeypatch):
     user = user_response()
+    permissions = AsyncMock()
+    permissions.list_effective_permissions.return_value = [
+        "projects.create",
+        "projects.publish",
+        "projects.view",
+        "users.view",
+    ]
     client.app.dependency_overrides[deps.get_current_user] = lambda: user
+    client.app.dependency_overrides[deps.get_permissions] = lambda: permissions
 
     client.cookies.set("access_token", "x")
     response = client.get("/api/auth/me")
 
     assert response.status_code == 200
     assert response.json()["email"] == "owner@example.com"
+    assert response.json()["permissions"] == [
+        "projects.create",
+        "projects.publish",
+        "projects.view",
+        "users.view",
+    ]
+    permissions.list_effective_permissions.assert_awaited_once_with(user["id"])
 
 
 def test_me_returns_fresh_user_from_db(client, monkeypatch):
@@ -145,9 +160,11 @@ def test_me_returns_fresh_user_from_db(client, monkeypatch):
         "is_owner": True,
     }
     repo.revocations.is_revoked.return_value = False
+    repo.permissions.list_effective_permissions.return_value = ["projects.view"]
     client.app.dependency_overrides[deps.get_users] = lambda: repo.users
     client.app.dependency_overrides[deps.get_memberships] = lambda: repo.memberships
     client.app.dependency_overrides[deps.get_revocations] = lambda: repo.revocations
+    client.app.dependency_overrides[deps.get_permissions] = lambda: repo.permissions
 
     client.cookies.set(
         "access_token", jwt.create_token({"id": fresh_user["id"]}, "access")
@@ -158,9 +175,27 @@ def test_me_returns_fresh_user_from_db(client, monkeypatch):
     body = response.json()
     assert body["verification_status"] == "in_progress"
     assert body["is_owner"] is True
+    assert body["permissions"] == ["projects.view"]
     assert "password" not in body
 
     repo.users.get_user_with_id.assert_awaited_once()
+    repo.permissions.list_effective_permissions.assert_awaited_once_with(
+        fresh_user["id"]
+    )
+
+
+def test_me_resource_returns_empty_permissions(client):
+    user = user_response() | {"org_id": None, "is_owner": None, "is_resource": True}
+    permissions = AsyncMock()
+    permissions.list_effective_permissions.return_value = []
+    client.app.dependency_overrides[deps.get_current_user] = lambda: user
+    client.app.dependency_overrides[deps.get_permissions] = lambda: permissions
+
+    client.cookies.set("access_token", "x")
+    response = client.get("/api/auth/me")
+
+    assert response.status_code == 200
+    assert response.json()["permissions"] == []
 
 
 def test_logout_revokes_access_for_subsequent_authentication(client):

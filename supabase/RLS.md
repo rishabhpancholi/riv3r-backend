@@ -1,6 +1,7 @@
 # Backend-only database access
 
-The six application tables in `public` have RLS enabled and no client policies.
+Application tables in `public`, including the three permission tables, have RLS
+enabled and no client policies.
 `PUBLIC`, `anon`, and `authenticated` have neither table nor column privileges.
 The backend uses `service_role`, which bypasses RLS; FastAPI must continue to
 authorize every user and organization operation. RLS does not protect against
@@ -13,12 +14,12 @@ to Supabase. No authentication or public API changes are required.
 
 ## Validate before deployment
 
-1. Compare the target database with the six tables in the migration. Review
+1. Compare the target database with the protected tables in the migrations. Review
    `pg_policies`, `pg_class.relrowsecurity`, `pg_class.relacl`, and
    `pg_attribute.attacl`, including grants inherited through role membership.
    Inspect exposed views and callable `SECURITY DEFINER` functions that may
    provide alternate access to these tables. Resolve unexpected exposure
-   before deploying; this migration only changes the six named tables.
+   before deploying.
 2. Capture a schema-only dump (including grants and policies, without
    `--no-acl`) using the existing database backup tooling. Save it securely
    outside the repository. Record the previous RLS flags as well, and prepare
@@ -35,12 +36,12 @@ to Supabase. No authentication or public API changes are required.
 
    ```powershell
    psql $env:TEST_DATABASE_URL -X -v ON_ERROR_STOP=1 -f supabase/tests/database/backend_only_rls.sql
+   psql $env:TEST_DATABASE_URL -X -v ON_ERROR_STOP=1 -f supabase/tests/database/permissions.sql
    ```
 
-   The suite needs no extensions. It inserts fixtures through `service_role`,
-   checks all six tables under both client roles, temporarily grants CRUD to
-   prove RLS independently denies access, and verifies privileged reads,
-   updates, and deletes. All changes are rolled back. A failed assertion
+   The suites insert fixtures through `service_role`, verify backend-only access,
+   and validate permission grants, dependency traversal, cycle rejection, and
+   resource-user restrictions. All changes are rolled back. A failed assertion
    returns a nonzero exit code; closing the failed connection rolls back.
 
 6. Smoke-test staging through FastAPI: organization and resource onboarding,

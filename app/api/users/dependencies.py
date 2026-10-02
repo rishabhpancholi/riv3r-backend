@@ -3,7 +3,12 @@ from redis.asyncio import Redis
 
 from app.core import dependencies as core_deps
 from app.core.config import load_settings
-from app.core.permissions import OrganizationLevelPermissionChecker, PermissionChecker
+from app.core.permissions import (
+    OrderedPermissionChecker,
+    OrganizationLevelPermissionChecker,
+    PermissionChecker,
+    UserPermissionChecker,
+)
 from app.repositories import contracts
 from app.repositories.redis import RedisOrganizationUsersCache
 from app.services.users import UsersService
@@ -29,7 +34,15 @@ def get_list_users_permission_checker(
     organizations: contracts.OrganizationRepository = Depends(
         core_deps.get_organizations
     ),
+    permissions: contracts.PermissionRepository = Depends(core_deps.get_permissions),
 ) -> PermissionChecker:
-    return OrganizationLevelPermissionChecker(
-        organizations, allowed_org_types={"client", "agency"}
+    return OrderedPermissionChecker(
+        (
+            OrganizationLevelPermissionChecker(
+                organizations, allowed_org_types={"client", "agency"}
+            ),
+            UserPermissionChecker(
+                permissions, required_permission="users.view"
+            ),
+        )
     )

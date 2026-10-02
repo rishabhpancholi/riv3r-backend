@@ -13,6 +13,9 @@ def repository_mocks():
         organizations=create_autospec(
             contracts.OrganizationRepository, instance=True, spec_set=True
         ),
+        permissions=create_autospec(
+            contracts.PermissionRepository, instance=True, spec_set=True
+        ),
         memberships=create_autospec(
             contracts.MembershipRepository, instance=True, spec_set=True
         ),
@@ -42,6 +45,8 @@ def repository_mocks():
     repositories.users.get_user_with_id.return_value = None
     repositories.users.get_user_with_email.return_value = None
     repositories.organizations.get_organization_by_id.return_value = None
+    repositories.permissions.has_effective_permission.return_value = False
+    repositories.permissions.list_effective_permissions.return_value = []
     repositories.memberships.get_org_membership.return_value = None
     repositories.resources.get_resource_by_user_id.return_value = None
     repositories.revocations.is_revoked.return_value = False

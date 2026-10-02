@@ -63,6 +63,9 @@ def test_create_draft_project(client, monkeypatch):
     client.app.dependency_overrides[
         project_deps.get_create_project_permission_checkers
     ] = lambda: ()
+    client.app.dependency_overrides[
+        project_deps.get_publish_project_permission_checkers
+    ] = lambda: ()
     audit = override_audit_service(client)
 
     response = client.post("/api/projects", json=payload)
@@ -91,6 +94,9 @@ def test_create_and_publish_project(client, monkeypatch):
     client.app.dependency_overrides[
         project_deps.get_create_project_permission_checkers
     ] = lambda: ()
+    client.app.dependency_overrides[
+        project_deps.get_publish_project_permission_checkers
+    ] = lambda: ()
 
     response = client.post("/api/projects", json=payload)
 
@@ -107,6 +113,9 @@ def test_project_rejects_invalid_currency(client):
     }
     client.app.dependency_overrides[
         project_deps.get_create_project_permission_checkers
+    ] = lambda: ()
+    client.app.dependency_overrides[
+        project_deps.get_publish_project_permission_checkers
     ] = lambda: ()
     response = client.post("/api/projects", json=project_payload(currency="usd"))
     assert response.status_code == 400
@@ -145,6 +154,9 @@ def test_publish_project_returns_updated_project(client, monkeypatch):
     client.app.dependency_overrides[
         project_deps.get_create_project_permission_checkers
     ] = lambda: ()
+    client.app.dependency_overrides[
+        project_deps.get_publish_project_permission_checkers
+    ] = lambda: ()
     audit = override_audit_service(client)
 
     response = client.post(f"/api/projects/{published['id']}/publish")
@@ -177,6 +189,9 @@ def test_publish_non_draft_project_returns_conflict(client, monkeypatch):
     }
     client.app.dependency_overrides[
         project_deps.get_create_project_permission_checkers
+    ] = lambda: ()
+    client.app.dependency_overrides[
+        project_deps.get_publish_project_permission_checkers
     ] = lambda: ()
     audit = override_audit_service(client)
 

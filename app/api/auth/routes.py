@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Request, Response, status
 
-from app.api.auth import schemas
+from app.api.auth import schemas, views as auth_views
 from app.api.onboarding import views
 from app.api.auth import dependencies as deps
 from app.core import dependencies as core_deps
 from app.core import exceptions
 from app.core.config import load_settings
+from app.repositories import contracts
 from app.services.auth import AuthService
 from app.services.audit import AuditService
 from app.utils import jwt
@@ -145,8 +146,10 @@ async def refresh(
     )
 
 
-@auth_router.get("/me", response_model=views.User)
+@auth_router.get("/me", response_model=auth_views.CurrentUser)
 async def get_me(
     user: dict = Depends(core_deps.get_current_user),
+    permissions: contracts.PermissionRepository = Depends(core_deps.get_permissions),
 ) -> dict:
-    return user
+    effective_permissions = await permissions.list_effective_permissions(user["id"])
+    return user | {"permissions": effective_permissions}

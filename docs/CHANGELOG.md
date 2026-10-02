@@ -3,6 +3,22 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-10-03 — Current-user permissions
+
+- Extended `GET /api/auth/me` with a deterministic list of the authenticated
+  user's direct and transitively inherited permissions.
+- Added a backend-only permission-listing function and returned an empty list for
+  users without grants, including resource users.
+
+## 2026-10-02 — Dependency-aware API permissions
+
+- Added backend-only permission, user-grant, and dependency tables with recursive
+  effective-permission resolution and cycle/resource-user safeguards.
+- Backfilled client project permissions, every seeded RIV3R permission, and agency
+  project-view access; new organization owners receive the same defaults atomically.
+- Enforced `projects.create`, `projects.publish`, and `users.view` after existing
+  organization eligibility checks without caching permission decisions.
+
 ## 2026-10-02 — Published project embeddings
 
 - Added 1,024-dimensional Voyage embeddings for immediate and draft-to-published

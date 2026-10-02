@@ -32,27 +32,47 @@ def use_real_users_dependencies(client):
     client.app.dependency_overrides[
         users_deps.get_organization_users_cache
     ] = lambda: repo.organization_users_cache
+    client.app.dependency_overrides[core_deps.get_permissions] = lambda: repo.permissions
     return repo
 
 
-def test_client_and_agency_can_list_their_own_users(client):
-    for org_type in ("client", "agency"):
-        org_id = str(uuid4())
-        repo = use_real_users_dependencies(client)
-        repo.organizations.get_organization_by_id.return_value = {
-            "id": org_id,
-            "org_type": org_type,
-        }
-        client.app.dependency_overrides[core_deps.get_current_user] = lambda: {
-            "id": str(uuid4()),
-            "org_id": org_id,
-            "is_resource": False,
-        }
+def test_client_with_users_view_can_list_own_users(client):
+    org_id = str(uuid4())
+    repo = use_real_users_dependencies(client)
+    repo.organizations.get_organization_by_id.return_value = {
+        "id": org_id,
+        "org_type": "client",
+    }
+    repo.permissions.has_effective_permission.return_value = True
+    client.app.dependency_overrides[core_deps.get_current_user] = lambda: {
+        "id": str(uuid4()),
+        "org_id": org_id,
+        "is_resource": False,
+    }
 
-        response = client.get("/api/users")
+    response = client.get("/api/users")
 
-        assert response.status_code == 200
-        repo.users.list_organization_users.assert_awaited_once_with(org_id)
+    assert response.status_code == 200
+    repo.users.list_organization_users.assert_awaited_once_with(org_id)
+
+
+def test_agency_without_users_view_is_forbidden(client):
+    org_id = str(uuid4())
+    repo = use_real_users_dependencies(client)
+    repo.organizations.get_organization_by_id.return_value = {
+        "id": org_id,
+        "org_type": "agency",
+    }
+    client.app.dependency_overrides[core_deps.get_current_user] = lambda: {
+        "id": str(uuid4()),
+        "org_id": org_id,
+        "is_resource": False,
+    }
+
+    response = client.get("/api/users")
+
+    assert response.status_code == 403
+    repo.organization_users_cache.get.assert_not_awaited()
 
 
 def test_riv3r_can_list_another_organizations_users(client):
@@ -63,6 +83,7 @@ def test_riv3r_can_list_another_organizations_users(client):
         {"id": caller_org_id, "org_type": "riv3r"},
         {"id": target_org_id, "org_type": "client"},
     ]
+    repo.permissions.has_effective_permission.return_value = True
     client.app.dependency_overrides[core_deps.get_current_user] = lambda: {
         "id": str(uuid4()),
         "org_id": caller_org_id,

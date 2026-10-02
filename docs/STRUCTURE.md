@@ -134,6 +134,8 @@ Rules:
    the refresh-token hash.
 3. `get_current_user` validates the access cookie, checks Redis revocation, reloads
    the current database user, and attaches membership ownership when relevant.
+   `GET /api/auth/me` additionally resolves and returns the user's sorted effective
+   permission keys through a backend-only PostgreSQL function.
 4. Refresh requires matching access/refresh identities and a valid stored refresh
    hash; logout revokes access in Redis and blacklists refresh in PostgreSQL.
 5. Audit logging runs after the primary operation and never changes its result.
@@ -145,13 +147,15 @@ Rules:
    refresh token.
 3. One repository RPC call invokes the relevant PostgreSQL function.
 4. PostgreSQL takes advisory locks, performs authoritative duplicate checks, and
-   inserts all related rows in one transaction.
+   inserts all related rows in one transaction. Creating the owner membership also
+   grants organization-type defaults through a transactional trigger.
 5. The route sets authentication cookies and attempts an independent audit entry.
 
 ### Project creation
 
 1. `get_current_user` authenticates and reloads the user.
-2. All configured permission checkers run concurrently.
+2. Organization eligibility runs before the effective `projects.create` permission
+   lookup.
 3. Clients must pass the SPOC membership check; a RIV3R decision grants cross-tenant
    access and skips it.
 4. The service derives organization and creator IDs from the current user. Draft
@@ -163,7 +167,8 @@ Rules:
 
 ### Project publishing
 
-1. The project lookup and permission checkers run concurrently.
+1. The project lookup and ordered authorization run concurrently; organization
+   eligibility precedes the effective `projects.publish` lookup inside authorization.
 2. The service applies 404, permission, tenant, and lifecycle checks in that order.
 3. After validation, the service attempts the primary Voyage model and then the
    lower-tier Voyage fallback once. Both failures are logged but do not block
@@ -178,8 +183,9 @@ Rules:
 ### Organization user directory
 
 1. `get_current_user` authenticates and reloads the caller.
-2. Organization-level permission allows client and agency users in their own tenant
-   and grants RIV3R cross-tenant access.
+2. Organization-level eligibility is checked before effective `users.view` access.
+   Clients are granted it through `projects.create`; RIV3R receives it directly;
+   agencies currently have only `projects.view` and are denied this endpoint.
 3. A non-RIV3R cross-tenant request is rejected before any cache or database read;
    an explicit RIV3R target must identify an existing organization.
 4. The service reads `org_users:{org_id}` from Redis, validates cached records, and
@@ -192,11 +198,14 @@ Rules:
 
 `PermissionChecker.check()` returns a `PermissionDecision`. Checkers raise a domain
 `PermissionError` when access is denied and otherwise may grant capabilities such as
-`cross_tenant`. Independent checkers should be executed with `asyncio.gather`.
+`cross_tenant`. `OrderedPermissionChecker` sequences organization eligibility before
+database-backed effective-permission checks and merges their decisions.
 
-RIV3R is privileged by default in `OrganizationLevelPermissionChecker`; client and
-agency access must be explicitly configured per API. A privileged decision never
-removes the need for state predicates in the final database mutation.
+`user_has_permission` recursively resolves direct grants and dependency edges in
+PostgreSQL. Permission decisions are deliberately uncached so changes take effect on
+the next request. RIV3R is cross-tenant in `OrganizationLevelPermissionChecker` but
+still needs the endpoint permission. A privileged decision never removes the need
+for state predicates in the final database mutation.
 
 ## Concurrency and transaction boundaries
 

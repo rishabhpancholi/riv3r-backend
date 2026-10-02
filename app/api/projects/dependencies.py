@@ -4,7 +4,12 @@ from supabase import AsyncClient
 from app.clients.contracts import EmbeddingsClient
 from app.core import dependencies as core_deps
 from app.core.config import load_settings
-from app.core.permissions import OrganizationLevelPermissionChecker, PermissionChecker
+from app.core.permissions import (
+    OrderedPermissionChecker,
+    OrganizationLevelPermissionChecker,
+    PermissionChecker,
+    UserPermissionChecker,
+)
 from app.repositories import contracts
 from app.repositories import supabase as repositories
 from app.services.projects import ProjectService
@@ -50,9 +55,37 @@ def get_create_project_permission_checkers(
     organizations: contracts.OrganizationRepository = Depends(
         core_deps.get_organizations
     ),
+    permissions: contracts.PermissionRepository = Depends(core_deps.get_permissions),
 ) -> tuple[PermissionChecker, ...]:
     return (
-        OrganizationLevelPermissionChecker(
-            organizations, allowed_org_types={"client"}
+        OrderedPermissionChecker(
+            (
+                OrganizationLevelPermissionChecker(
+                    organizations, allowed_org_types={"client"}
+                ),
+                UserPermissionChecker(
+                    permissions, required_permission="projects.create"
+                ),
+            )
+        ),
+    )
+
+
+def get_publish_project_permission_checkers(
+    organizations: contracts.OrganizationRepository = Depends(
+        core_deps.get_organizations
+    ),
+    permissions: contracts.PermissionRepository = Depends(core_deps.get_permissions),
+) -> tuple[PermissionChecker, ...]:
+    return (
+        OrderedPermissionChecker(
+            (
+                OrganizationLevelPermissionChecker(
+                    organizations, allowed_org_types={"client"}
+                ),
+                UserPermissionChecker(
+                    permissions, required_permission="projects.publish"
+                ),
+            )
         ),
     )

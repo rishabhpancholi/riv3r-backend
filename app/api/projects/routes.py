@@ -48,7 +48,7 @@ async def publish_project(
     project_service: ProjectService = Depends(deps.get_project_service),
     audit_service: AuditService = Depends(core_deps.get_audit_service),
     permission_checkers: tuple[PermissionChecker, ...] = Depends(
-        deps.get_create_project_permission_checkers
+        deps.get_publish_project_permission_checkers
     ),
 ) -> dict:
     response = await project_service.publish_project(

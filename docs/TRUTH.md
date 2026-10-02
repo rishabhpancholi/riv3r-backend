@@ -32,6 +32,8 @@ schema and code remain authoritative and this file must be corrected.
 - Deleting an organization cascades to its non-resource users; deleting a user or
   organization cascades to organization memberships.
 - Resource users cannot be inserted into `organization_members`.
+- Resource users cannot receive API permissions, and a permissioned organization
+  user cannot be converted into a resource user without first removing grants.
 - Organization membership is unique by `(organization_id, user_id)` and ownership
   is represented by non-null `is_owner`.
 - Each user can have at most one resource profile (`resources.user_id` is unique).
@@ -43,7 +45,8 @@ schema and code remain authoritative and this file must be corrected.
 ## Onboarding atomicity
 
 - Organization onboarding atomically creates the organization, owner user, owner
-  membership, and initial refresh token through `onboard_organization_atomic`.
+  membership, initial role-appropriate permissions, and initial refresh token
+  through `onboard_organization_atomic` and its membership trigger.
 - Resource onboarding atomically creates the user, resource profile, and initial
   refresh token through `onboard_resource_atomic`.
 - Both RPCs are `SECURITY INVOKER`; only `service_role` may execute them.
@@ -65,6 +68,9 @@ schema and code remain authoritative and this file must be corrected.
   Redis. This is cross-store work and is not one ACID transaction.
 - Auth cookies are HTTP-only and `SameSite=Lax`; `Secure` is enabled in production.
 - Login and onboarding are IP-rate-limited using Redis.
+- `GET /api/auth/me` returns the authenticated user's current effective permission
+  keys, including transitively inherited permissions, in deterministic key order.
+  Resource users receive an empty permission list.
 
 ## Projects
 
@@ -106,18 +112,30 @@ schema and code remain authoritative and this file must be corrected.
 
 ## Authorization and data access
 
-- `PermissionChecker` implementations are asynchronous and may run concurrently.
+- `PermissionChecker` implementations are asynchronous. Organization eligibility
+  is evaluated before endpoint permissions so rejected organization types do not
+  trigger permission lookups.
 - `OrganizationLevelPermissionChecker` rejects resource users and users without a
   valid organization. RIV3R receives cross-tenant permission by default.
-- Project creation/publishing currently allows client and RIV3R organizations;
-  agencies are denied.
+- Effective permissions include direct grants and transitive dependencies.
+  `projects.create` implies `projects.view` and `users.view`, while
+  `projects.publish` implies `projects.view`.
+- Client users initially receive `projects.create` and `projects.publish`; RIV3R
+  users receive every seeded permission; agency users receive only
+  `projects.view`; resource users receive none.
+- Project creation requires `projects.create`, publishing requires
+  `projects.publish`, and the organization user directory requires `users.view`,
+  in addition to the existing organization and tenant checks.
+- Project creation/publishing allows client and permissioned RIV3R organizations;
+  agencies remain denied. Permissioned RIV3R users retain cross-tenant access.
 - All application tables have RLS enabled with no browser-client policies. `PUBLIC`,
   `anon`, and `authenticated` have no table access; the backend uses `service_role`.
 - Because `service_role` bypasses RLS, every FastAPI query must enforce authorization
   explicitly and must repeat security-critical predicates in mutation queries.
-- Organization-directory authorization is completed before its organization-scoped
-  Redis cache is read. Cache failures fall back to PostgreSQL, and entries may be
-  stale for at most `CACHE_TTL` until user mutation APIs add active invalidation.
+- Organization-directory authorization, including `users.view`, is completed
+  before its organization-scoped Redis cache is read. Cache failures fall back to
+  PostgreSQL, and entries may be stale for at most `CACHE_TTL` until user mutation
+  APIs add active invalidation.
 
 ## Validation rules
 

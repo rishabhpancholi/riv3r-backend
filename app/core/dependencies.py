@@ -42,6 +42,12 @@ def get_organizations(
     return repositories.SupabaseOrganizationRepository(db)
 
 
+def get_permissions(
+    db: AsyncClient = Depends(get_db),
+) -> contracts.PermissionRepository:
+    return repositories.SupabasePermissionRepository(db)
+
+
 def get_memberships(
     db: AsyncClient = Depends(get_db),
 ) -> contracts.MembershipRepository:
