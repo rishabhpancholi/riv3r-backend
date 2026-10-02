@@ -150,6 +150,7 @@ Rules:
 4. The service derives organization and creator IDs from the current user. Draft
    creation relies on SQL defaults; immediate publication supplies status/time.
 5. The repository inserts and returns the project row.
+6. The route attempts a best-effort `project_create` audit after success.
 
 ### Project publishing
 
@@ -159,6 +160,7 @@ Rules:
    client mutation also requires its organization ID.
 4. If no row updates, the service re-reads once to classify a concurrent deletion,
    tenant change, or lifecycle conflict accurately.
+5. The route attempts a best-effort `project_publish` audit after success.
 
 ## Permissions
 

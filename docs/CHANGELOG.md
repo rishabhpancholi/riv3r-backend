@@ -13,6 +13,7 @@ commit dates recorded in Git.
   Voyage 4 (`voyage-4`) for embeddings through environment-backed settings.
 - Moved external-client lifecycle management from `app/db` to `app/clients` and
   guaranteed cleanup during FastAPI shutdown.
+- Added best-effort audit logging for successful project creation and publishing.
 
 ## 2026-10-01 — Configurable CORS origins
 

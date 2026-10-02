@@ -7,6 +7,12 @@ from app.core import dependencies as core_deps
 from app.core import exceptions
 
 
+def override_audit_service(client):
+    audit = AsyncMock()
+    client.app.dependency_overrides[core_deps.get_audit_service] = lambda: audit
+    return audit
+
+
 def project_payload(**overrides):
     payload = {
         "spoc_user_id": str(uuid4()),
@@ -48,14 +54,16 @@ def test_create_draft_project(client, monkeypatch):
     payload = project_payload()
     create = AsyncMock(return_value=project_response(payload))
     monkeypatch.setattr("app.services.projects.ProjectService.create_project", create)
-    client.app.dependency_overrides[core_deps.get_current_user] = lambda: {
+    user = {
         "id": str(uuid4()),
         "org_id": str(uuid4()),
         "is_resource": False,
     }
+    client.app.dependency_overrides[core_deps.get_current_user] = lambda: user
     client.app.dependency_overrides[
         project_deps.get_create_project_permission_checkers
     ] = lambda: ()
+    audit = override_audit_service(client)
 
     response = client.post("/api/projects", json=payload)
 
@@ -63,6 +71,12 @@ def test_create_draft_project(client, monkeypatch):
     assert response.json()["status"] == "draft"
     assert response.json()["published_at"] is None
     create.assert_awaited_once()
+    audit.log.assert_awaited_once()
+    assert audit.log.await_args.kwargs == {
+        "user_id": user["id"],
+        "entity_type": "project",
+        "task_type": "project_create",
+    }
 
 
 def test_create_and_publish_project(client, monkeypatch):
@@ -131,6 +145,7 @@ def test_publish_project_returns_updated_project(client, monkeypatch):
     client.app.dependency_overrides[
         project_deps.get_create_project_permission_checkers
     ] = lambda: ()
+    audit = override_audit_service(client)
 
     response = client.post(f"/api/projects/{published['id']}/publish")
 
@@ -138,6 +153,12 @@ def test_publish_project_returns_updated_project(client, monkeypatch):
     assert response.json()["status"] == "published"
     assert response.json()["published_at"] is not None
     publish.assert_awaited_once()
+    audit.log.assert_awaited_once()
+    assert audit.log.await_args.kwargs == {
+        "user_id": user["id"],
+        "entity_type": "project",
+        "task_type": "project_publish",
+    }
 
 
 def test_publish_non_draft_project_returns_conflict(client, monkeypatch):
@@ -157,8 +178,10 @@ def test_publish_non_draft_project_returns_conflict(client, monkeypatch):
     client.app.dependency_overrides[
         project_deps.get_create_project_permission_checkers
     ] = lambda: ()
+    audit = override_audit_service(client)
 
     response = client.post(f"/api/projects/{uuid4()}/publish")
 
     assert response.status_code == 409
     assert response.json()["message"] == "Only draft projects can be published"
+    audit.log.assert_not_awaited()
