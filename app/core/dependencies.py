@@ -2,6 +2,7 @@ from fastapi import Depends, Request
 from redis.asyncio import Redis
 from supabase import AsyncClient
 
+from app.clients.contracts import EmbeddingsClient, LLMClient
 from app.core import exceptions
 from app.repositories import contracts
 from app.repositories import supabase as repositories
@@ -17,6 +18,14 @@ def get_db(request: Request) -> AsyncClient:
 
 def get_cache(request: Request) -> Redis:
     return request.app.state.connection.cache
+
+
+def get_llm(request: Request) -> LLMClient:
+    return request.app.state.connection.llm
+
+
+def get_embeddings(request: Request) -> EmbeddingsClient:
+    return request.app.state.connection.embeddings
 
 
 def get_users(db: AsyncClient = Depends(get_db)) -> contracts.UserRepository:

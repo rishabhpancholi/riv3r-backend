@@ -4,9 +4,10 @@ RIV3R is the API behind an organization-and-talent delivery platform: companies
 onboard teams, independent resources build professional profiles, and authorized
 organizations create and publish projects with a designated point of contact.
 
-The backend is built with FastAPI, Supabase/PostgreSQL, and Redis. It favors a
-small service/repository architecture, explicit permission checks, and database
-transactions for workflows that must succeed or fail as one unit.
+The backend is built with FastAPI, Supabase/PostgreSQL, Redis, Anthropic, and
+Voyage AI. It favors a small service/repository architecture, explicit permission
+checks, provider-neutral AI clients, and database transactions for workflows that
+must succeed or fail as one unit.
 
 ## What is here
 
@@ -70,11 +71,23 @@ CACHE_HOST=localhost
 CACHE_PORT=6379
 CACHE_USERNAME=default
 CACHE_PASSWORD=your-redis-password
+LLM_API_KEY=your-anthropic-api-key
+LLM_MODEL=claude-haiku-4-5-20251001
+EMBEDDINGS_API_KEY=your-voyage-api-key
+EMBEDDINGS_MODEL=voyage-4
 JWT_SECRET_KEY=use-a-strong-private-secret
 CORS_ALLOWED_ORIGINS=["http://localhost:3000"]
 ```
 
 Optional settings include `APP_MODE`, JWT lifetimes, cache TTL, and login rate
+limits. Never expose `DATABASE_KEY` or `JWT_SECRET_KEY` to a browser client.
+The AI API keys and model names are also required at startup and must remain
+server-side.
+
+Application code should request the shared provider-neutral clients with the
+`get_llm` and `get_embeddings` FastAPI dependencies. Callers use application-owned
+chat messages and query/document embedding methods; they do not select Anthropic
+or Voyage models directly.
 limits. `CORS_ALLOWED_ORIGINS` is a JSON list of browser origins permitted to call
 the API with credentials. Never expose `DATABASE_KEY` or `JWT_SECRET_KEY` to a
 browser client.

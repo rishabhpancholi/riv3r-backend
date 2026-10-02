@@ -8,10 +8,12 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=1.11.0",
     "bcrypt>=5.0.0",
     "fastapi[standard]>=0.141.1",
     "redis[asyncio]>=8.1.0",
     "supabase>=2.31.0",
+    "voyageai>=0.5.0",
 ]
 
 [project.scripts]

@@ -5,7 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import load_settings
 from app.core.exception_handlers import register_exception_handlers
-from app.db.connection import Connection
+from app.clients.connection import Connection
 from app.api.onboarding.routes import onboarding_router
 from app.api.auth.routes import auth_router
 from app.api.projects.routes import projects_router
@@ -17,13 +17,13 @@ settings = load_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     connection = Connection(settings)
-    await connection.init_db()
-    connection.init_cache()
+    await connection.initialize()
     app.state.connection = connection
 
-    yield
-
-    await connection.close_cache()
+    try:
+        yield
+    finally:
+        await connection.close()
 
 
 app = FastAPI(

@@ -19,6 +19,12 @@ jobs:
       CACHE_USERNAME: ${{ secrets.CACHE_USERNAME }}
       CACHE_PASSWORD: ${{ secrets.CACHE_PASSWORD }}
       CACHE_TTL: ${{ secrets.CACHE_TTL }}
+      # AI calls are mocked in the isolated suite; these values only satisfy
+      # startup configuration validation.
+      LLM_API_KEY: test-anthropic-key
+      LLM_MODEL: test-anthropic-model
+      EMBEDDINGS_API_KEY: test-voyage-key
+      EMBEDDINGS_MODEL: test-voyage-model
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       JWT_ALGORITHM: ${{ secrets.JWT_ALGORITHM }}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.JWT_ACCESS_TOKEN_EXPIRE_MINUTES }}

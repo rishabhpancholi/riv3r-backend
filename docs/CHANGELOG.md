@@ -3,6 +3,17 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-10-02 — Provider-neutral AI clients
+
+- Added process-wide Anthropic and Voyage AI adapters behind application-owned LLM
+  and embedding interfaces.
+- Added shared `get_llm` and `get_embeddings` dependencies and required API-key and
+  model settings.
+- Configured Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) for generation and
+  Voyage 4 (`voyage-4`) for embeddings through environment-backed settings.
+- Moved external-client lifecycle management from `app/db` to `app/clients` and
+  guaranteed cleanup during FastAPI shutdown.
+
 ## 2026-10-01 — Configurable CORS origins
 
 - Added an environment-backed allowlist of browser origins and configured CORS to

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     cache_password: str 
     cache_ttl: int = 300
 
+    llm_api_key: str
+    llm_model: str
+    embeddings_api_key: str
+    embeddings_model: str
+
     jwt_secret_key: str  
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
