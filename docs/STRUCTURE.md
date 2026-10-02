@@ -18,10 +18,11 @@ PostgreSQL
   -> backend-only RLS boundary
 ```
 
-`app.main` creates one Supabase async client and one Redis client for the process.
-They are stored on `app.state.connection` during the FastAPI lifespan. Redis is
-closed on shutdown; repository instances are lightweight request-scoped wrappers
-around these shared clients.
+`app.main` creates one Supabase async client, one Redis client, one Anthropic-backed
+LLM adapter, and one Voyage-backed embedding adapter for the process. They are
+stored on `app.state.connection` during the FastAPI lifespan. Closeable resources
+are released on shutdown; repository instances are lightweight request-scoped
+wrappers around the shared storage clients.
 
 ## Package responsibilities
 
@@ -72,7 +73,8 @@ time-of-check/time-of-use bugs.
 - `config.py` loads cached environment-backed settings, including the
   JSON-configured list of browser origins allowed by CORS.
 - `dependencies.py` exposes universal connections, shared repositories,
-  authentication, revocations, audit wiring, and duplicate-check composition.
+  provider-neutral AI clients, authentication, revocations, audit wiring, and
+  duplicate-check composition.
 - `permissions.py` defines async permission checkers and cross-tenant decisions.
 - `exceptions.py` defines domain-aware HTTP errors.
 - `exception_handlers.py` converts known errors into consistent JSON responses.
@@ -82,7 +84,11 @@ Feature-specific providers do not belong in `app/core.dependencies`.
 
 ### Infrastructure and utilities
 
-- `app/db/connection.py` owns Supabase and Redis lifecycle creation.
+- `app/clients/connection.py` owns the process-wide Supabase, Redis, LLM, and
+  embedding lifecycle.
+- `app/clients/contracts.py` defines the provider-neutral chat and embedding
+  interfaces used by application code. Concrete Anthropic and Voyage adapters keep
+  SDK types and configured model names inside the clients package.
 - `app/middlewares/middlewares.py` assigns request IDs and process-time headers.
 - `app/utils/jwt.py` issues, hashes, and validates typed JWTs.
 - `app/utils/password.py` hashes and verifies passwords.
