@@ -2,6 +2,8 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import pytest
+
 from app.api.users import dependencies as users_deps
 from app.core import dependencies as core_deps
 from app.core import exceptions
@@ -36,12 +38,13 @@ def use_real_users_dependencies(client):
     return repo
 
 
-def test_client_with_users_view_can_list_own_users(client):
+@pytest.mark.parametrize("org_type", ["client", "agency"])
+def test_organization_user_with_users_view_can_list_own_users(client, org_type):
     org_id = str(uuid4())
     repo = use_real_users_dependencies(client)
     repo.organizations.get_organization_by_id.return_value = {
         "id": org_id,
-        "org_type": "client",
+        "org_type": org_type,
     }
     repo.permissions.has_effective_permission.return_value = True
     client.app.dependency_overrides[core_deps.get_current_user] = lambda: {

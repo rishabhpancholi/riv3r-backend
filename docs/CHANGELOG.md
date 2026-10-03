@@ -3,6 +3,15 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-10-03 — Organization context and atomic owner grants
+
+- Added `org_type` to `GET /api/auth/me` while preserving its effective permission
+  list; resource users receive a null organization type.
+- Moved owner permission assignment from the membership trigger into the atomic
+  organization-onboarding RPC without changing the onboarding response.
+- Added direct client, agency, and RIV3R owner defaults and backfilled existing
+  owners with conflict-safe grants.
+
 ## 2026-10-03 — Current-user permissions
 
 - Extended `GET /api/auth/me` with a deterministic list of the authenticated

@@ -113,6 +113,8 @@ def test_onboard_organization_success(client, monkeypatch):
     assert body["company_email"] == "acme@example.com"
     assert body["org_type"] == "client"
     assert body["owner"]["email"] == "owner@example.com"
+    assert "permissions" not in body
+    assert "permissions" not in body["owner"]
 
     set_cookies = response.headers.get_list("set-cookie")
     assert any(

@@ -111,13 +111,15 @@ Project creation requires `projects.create`, project publishing requires
 `projects.publish`, and the organization directory requires `users.view`.
 `projects.create` automatically includes `projects.view` and `users.view`;
 `projects.publish` includes `projects.view`. Client users receive the project
-creation and publication grants, RIV3R users receive all seeded permissions, and
-agency users currently receive only `projects.view`. Permission decisions are read
-from PostgreSQL on every protected request and are not cached.
+creation and publication grants, RIV3R owners receive all seeded permissions, and
+agency owners receive `projects.view` and `users.view`. These owner defaults are
+inserted atomically by organization onboarding. Permission decisions are read from
+PostgreSQL on every protected request and are not cached.
 
 `GET /api/auth/me` includes a sorted `permissions` array containing all direct and
-inherited permissions currently effective for the authenticated user. Resource
-users receive an empty array.
+inherited permissions currently effective for the authenticated user, plus
+`org_type` for organization users. Resource users receive an empty permission array
+and `org_type: null`.
 
 Apply migrations using the configured Supabase workflow, then start the API:
 

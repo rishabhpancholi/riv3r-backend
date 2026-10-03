@@ -135,7 +135,8 @@ Rules:
 3. `get_current_user` validates the access cookie, checks Redis revocation, reloads
    the current database user, and attaches membership ownership when relevant.
    `GET /api/auth/me` additionally resolves and returns the user's sorted effective
-   permission keys through a backend-only PostgreSQL function.
+   permission keys through a backend-only PostgreSQL function and resolves the
+   organization type for organization users. Resource users return a null type.
 4. Refresh requires matching access/refresh identities and a valid stored refresh
    hash; logout revokes access in Redis and blacklists refresh in PostgreSQL.
 5. Audit logging runs after the primary operation and never changes its result.
@@ -147,8 +148,8 @@ Rules:
    refresh token.
 3. One repository RPC call invokes the relevant PostgreSQL function.
 4. PostgreSQL takes advisory locks, performs authoritative duplicate checks, and
-   inserts all related rows in one transaction. Creating the owner membership also
-   grants organization-type defaults through a transactional trigger.
+   inserts all related rows—including the owner's organization-type permission
+   defaults—inside `onboard_organization_atomic` in one transaction.
 5. The route sets authentication cookies and attempts an independent audit entry.
 
 ### Project creation
@@ -184,8 +185,9 @@ Rules:
 
 1. `get_current_user` authenticates and reloads the caller.
 2. Organization-level eligibility is checked before effective `users.view` access.
-   Clients are granted it through `projects.create`; RIV3R receives it directly;
-   agencies currently have only `projects.view` and are denied this endpoint.
+   Clients receive it directly and through `projects.create`; RIV3R receives it
+   directly; agency owners receive it directly while unassigned agency users are
+   denied this endpoint.
 3. A non-RIV3R cross-tenant request is rejected before any cache or database read;
    an explicit RIV3R target must identify an existing organization.
 4. The service reads `org_users:{org_id}` from Redis, validates cached records, and

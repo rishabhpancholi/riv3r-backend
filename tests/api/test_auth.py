@@ -1,6 +1,8 @@
 import uuid
 from unittest.mock import AsyncMock
 
+import pytest
+
 from app.core import dependencies as deps
 from app.core import exceptions
 from app.utils import jwt
@@ -125,14 +127,20 @@ def test_me_without_token(client, monkeypatch):
 def test_me_success(client, monkeypatch):
     user = user_response()
     permissions = AsyncMock()
+    organizations = AsyncMock()
     permissions.list_effective_permissions.return_value = [
         "projects.create",
         "projects.publish",
         "projects.view",
         "users.view",
     ]
+    organizations.get_organization_by_id.return_value = {
+        "id": user["org_id"],
+        "org_type": "client",
+    }
     client.app.dependency_overrides[deps.get_current_user] = lambda: user
     client.app.dependency_overrides[deps.get_permissions] = lambda: permissions
+    client.app.dependency_overrides[deps.get_organizations] = lambda: organizations
 
     client.cookies.set("access_token", "x")
     response = client.get("/api/auth/me")
@@ -145,7 +153,9 @@ def test_me_success(client, monkeypatch):
         "projects.view",
         "users.view",
     ]
+    assert response.json()["org_type"] == "client"
     permissions.list_effective_permissions.assert_awaited_once_with(user["id"])
+    organizations.get_organization_by_id.assert_awaited_once_with(user["org_id"])
 
 
 def test_me_returns_fresh_user_from_db(client, monkeypatch):
@@ -161,10 +171,15 @@ def test_me_returns_fresh_user_from_db(client, monkeypatch):
     }
     repo.revocations.is_revoked.return_value = False
     repo.permissions.list_effective_permissions.return_value = ["projects.view"]
+    repo.organizations.get_organization_by_id.return_value = {
+        "id": fresh_user["org_id"],
+        "org_type": "agency",
+    }
     client.app.dependency_overrides[deps.get_users] = lambda: repo.users
     client.app.dependency_overrides[deps.get_memberships] = lambda: repo.memberships
     client.app.dependency_overrides[deps.get_revocations] = lambda: repo.revocations
     client.app.dependency_overrides[deps.get_permissions] = lambda: repo.permissions
+    client.app.dependency_overrides[deps.get_organizations] = lambda: repo.organizations
 
     client.cookies.set(
         "access_token", jwt.create_token({"id": fresh_user["id"]}, "access")
@@ -176,6 +191,7 @@ def test_me_returns_fresh_user_from_db(client, monkeypatch):
     assert body["verification_status"] == "in_progress"
     assert body["is_owner"] is True
     assert body["permissions"] == ["projects.view"]
+    assert body["org_type"] == "agency"
     assert "password" not in body
 
     repo.users.get_user_with_id.assert_awaited_once()
@@ -196,6 +212,40 @@ def test_me_resource_returns_empty_permissions(client):
 
     assert response.status_code == 200
     assert response.json()["permissions"] == []
+    assert response.json()["org_type"] is None
+
+
+def test_me_fails_when_organization_is_missing(client):
+    user = user_response()
+    permissions = AsyncMock()
+    organizations = AsyncMock()
+    permissions.list_effective_permissions.return_value = ["projects.view"]
+    organizations.get_organization_by_id.return_value = None
+    client.app.dependency_overrides[deps.get_current_user] = lambda: user
+    client.app.dependency_overrides[deps.get_permissions] = lambda: permissions
+    client.app.dependency_overrides[deps.get_organizations] = lambda: organizations
+
+    client.cookies.set("access_token", "x")
+    with pytest.raises(RuntimeError, match="organization was not found"):
+        client.get("/api/auth/me")
+
+
+def test_me_fails_when_permission_lookup_fails(client):
+    user = user_response()
+    permissions = AsyncMock()
+    organizations = AsyncMock()
+    permissions.list_effective_permissions.side_effect = RuntimeError("database down")
+    organizations.get_organization_by_id.return_value = {
+        "id": user["org_id"],
+        "org_type": "client",
+    }
+    client.app.dependency_overrides[deps.get_current_user] = lambda: user
+    client.app.dependency_overrides[deps.get_permissions] = lambda: permissions
+    client.app.dependency_overrides[deps.get_organizations] = lambda: organizations
+
+    client.cookies.set("access_token", "x")
+    with pytest.raises(RuntimeError, match="database down"):
+        client.get("/api/auth/me")
 
 
 def test_logout_revokes_access_for_subsequent_authentication(client):

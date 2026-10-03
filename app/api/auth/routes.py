@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.api.auth import schemas, views as auth_views
@@ -150,6 +152,26 @@ async def refresh(
 async def get_me(
     user: dict = Depends(core_deps.get_current_user),
     permissions: contracts.PermissionRepository = Depends(core_deps.get_permissions),
+    organizations: contracts.OrganizationRepository = Depends(
+        core_deps.get_organizations
+    ),
 ) -> dict:
-    effective_permissions = await permissions.list_effective_permissions(user["id"])
-    return user | {"permissions": effective_permissions}
+    if user.get("is_resource"):
+        effective_permissions = await permissions.list_effective_permissions(
+            user["id"]
+        )
+        return user | {
+            "permissions": effective_permissions,
+            "org_type": None,
+        }
+
+    effective_permissions, organization = await asyncio.gather(
+        permissions.list_effective_permissions(user["id"]),
+        organizations.get_organization_by_id(user["org_id"]),
+    )
+    if not organization:
+        raise RuntimeError("Authenticated user's organization was not found")
+    return user | {
+        "permissions": effective_permissions,
+        "org_type": organization["org_type"],
+    }

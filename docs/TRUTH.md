@@ -46,7 +46,7 @@ schema and code remain authoritative and this file must be corrected.
 
 - Organization onboarding atomically creates the organization, owner user, owner
   membership, initial role-appropriate permissions, and initial refresh token
-  through `onboard_organization_atomic` and its membership trigger.
+  directly through `onboard_organization_atomic`.
 - Resource onboarding atomically creates the user, resource profile, and initial
   refresh token through `onboard_resource_atomic`.
 - Both RPCs are `SECURITY INVOKER`; only `service_role` may execute them.
@@ -70,7 +70,8 @@ schema and code remain authoritative and this file must be corrected.
 - Login and onboarding are IP-rate-limited using Redis.
 - `GET /api/auth/me` returns the authenticated user's current effective permission
   keys, including transitively inherited permissions, in deterministic key order.
-  Resource users receive an empty permission list.
+  It also returns the organization type for organization users. Resource users
+  receive an empty permission list and a null organization type.
 
 ## Projects
 
@@ -120,14 +121,17 @@ schema and code remain authoritative and this file must be corrected.
 - Effective permissions include direct grants and transitive dependencies.
   `projects.create` implies `projects.view` and `users.view`, while
   `projects.publish` implies `projects.view`.
-- Client users initially receive `projects.create` and `projects.publish`; RIV3R
-  users receive every seeded permission; agency users receive only
-  `projects.view`; resource users receive none.
+- Client owners directly receive `projects.view`, `projects.create`,
+  `projects.publish`, and `users.view`; agency owners directly receive
+  `projects.view` and `users.view`; RIV3R owners receive every seeded permission.
+  Existing non-owner grants remain unchanged, and resource users receive none.
 - Project creation requires `projects.create`, publishing requires
   `projects.publish`, and the organization user directory requires `users.view`,
   in addition to the existing organization and tenant checks.
 - Project creation/publishing allows client and permissioned RIV3R organizations;
   agencies remain denied. Permissioned RIV3R users retain cross-tenant access.
+- Agency owners can access their own organization directory through `users.view`;
+  agency users without that permission remain denied.
 - All application tables have RLS enabled with no browser-client policies. `PUBLIC`,
   `anon`, and `authenticated` have no table access; the backend uses `service_role`.
 - Because `service_role` bypasses RLS, every FastAPI query must enforce authorization
