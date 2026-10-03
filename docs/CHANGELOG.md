@@ -3,6 +3,22 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-10-03 — Owner-phone duplicate conflict responses
+
+- Fixed organization onboarding returning an unhandled 500 (masking `KeyError`)
+  when the owner's phone number was already registered; it now returns 409 with
+  "Phone number with <value> already exists".
+- Normalized the atomic onboarding RPC duplicate detail to `owner_phone_number`,
+  matching the RPC parameter name like every other duplicate detail, through the
+  new `20261003120000_normalize_owner_phone_duplicate_detail` migration.
+- Hardened the onboarding repository: duplicate details resolve to a params key
+  with an optional explicit mapping, an unknown key re-raises the original
+  storage error, and the legacy `phone_number` detail from a not-yet-migrated
+  database still maps to `p_owner_phone_number`. Deploy the backend before the
+  migration; the legacy mapping can be removed in a later release.
+- Added database tests for onboarding duplicate details and atomicity plus unit
+  tests for the duplicate translation paths.
+
 ## 2026-10-03 — Organization context and atomic owner grants
 
 - Added `org_type` to `GET /api/auth/me` while preserving its effective permission

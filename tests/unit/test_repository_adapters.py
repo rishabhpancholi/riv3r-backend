@@ -3,7 +3,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from postgrest.exceptions import APIError
 
+from app.core import exceptions
 from app.repositories.supabase import (
     SupabaseAuditLogRepository,
     SupabaseMembershipRepository,
@@ -312,6 +314,79 @@ async def test_onboarding_repository_uses_atomic_rpc(method, function):
 
     db.rpc.assert_called_once_with(function, params)
     assert result == {"id": "created"}
+
+
+def duplicate_api_error(details):
+    return APIError(
+        {
+            "message": "duplicate onboarding value",
+            "code": "23505",
+            "hint": None,
+            "details": details,
+        }
+    )
+
+
+def duplicate_rpc(rpc_details):
+    db = MagicMock()
+    rpc = MagicMock()
+    rpc.execute = AsyncMock(side_effect=duplicate_api_error(rpc_details))
+    db.rpc.return_value = rpc
+    return db
+
+
+@pytest.mark.asyncio
+async def test_onboarding_repository_translates_company_email_duplicate():
+    db = duplicate_rpc("company_email")
+    params = {"p_company_email": "acme@example.com"}
+
+    with pytest.raises(exceptions.DuplicateError) as caught:
+        await SupabaseOnboardingRepository(db).onboard_organization(params)
+
+    assert caught.value.message == "Company email with acme@example.com already exists"
+    assert caught.value.status_code == 409
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("details", ["owner_phone_number", "phone_number"])
+async def test_onboarding_repository_maps_owner_phone_duplicates(details):
+    db = duplicate_rpc(details)
+    params = {
+        "p_owner_phone_number": "+919876543210",
+        "p_owner_email": "owner@example.com",
+    }
+
+    with pytest.raises(exceptions.DuplicateError) as caught:
+        await SupabaseOnboardingRepository(db).onboard_organization(params)
+
+    assert caught.value.message == "Phone number with +919876543210 already exists"
+
+
+@pytest.mark.asyncio
+async def test_onboarding_resource_phone_duplicate_uses_own_param():
+    db = duplicate_rpc("phone_number")
+    params = {"p_phone_number": "+919876543210", "p_email": "dev@example.com"}
+
+    with pytest.raises(exceptions.DuplicateError) as caught:
+        await SupabaseOnboardingRepository(db).onboard_resource(params)
+
+    assert caught.value.message == "Phone number with +919876543210 already exists"
+
+
+@pytest.mark.asyncio
+async def test_onboarding_duplicate_with_missing_param_key_reraises_api_error():
+    error = duplicate_api_error("phone_number")
+    db = MagicMock()
+    rpc = MagicMock()
+    rpc.execute = AsyncMock(side_effect=error)
+    db.rpc.return_value = rpc
+
+    with pytest.raises(APIError) as caught:
+        await SupabaseOnboardingRepository(db).onboard_organization(
+            {"p_owner_email": "owner@example.com"}
+        )
+
+    assert caught.value is error
 
 
 @pytest.mark.asyncio

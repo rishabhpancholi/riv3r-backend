@@ -49,6 +49,12 @@ schema and code remain authoritative and this file must be corrected.
   directly through `onboard_organization_atomic`.
 - Resource onboarding atomically creates the user, resource profile, and initial
   refresh token through `onboard_resource_atomic`.
+- Duplicate-value errors from the onboarding RPCs use `23505` with a DETAIL that
+  equals the offending RPC parameter name without the `p_` prefix
+  (`company_email`, `owner_email`, `owner_phone_number`, `website_url`,
+  `email`, `phone_number`, `portfolio_url`, `linked_in_url`). The backend
+  translates these into 409 duplicate responses; a known code with an unresolvable
+  detail must re-raise the storage error rather than crash.
 - Both RPCs are `SECURITY INVOKER`; only `service_role` may execute them.
 - Only hashed passwords and hashed refresh tokens are stored. Plaintext secrets must
   never be sent to PostgreSQL.

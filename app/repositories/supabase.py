@@ -296,6 +296,7 @@ class SupabaseOnboardingRepository:
         "owner_email": "user email",
         "email": "user email",
         "phone_number": "phone number",
+        "owner_phone_number": "phone number",
         "website_url": "website url",
         "portfolio_url": "portfolio url",
         "linked_in_url": "linkedin url",
@@ -304,21 +305,35 @@ class SupabaseOnboardingRepository:
     def __init__(self, db: AsyncClient):
         self.db = db
 
-    async def _execute(self, function: str, params: dict) -> dict:
+    async def _execute(
+        self,
+        function: str,
+        params: dict,
+        field_param_keys: dict[str, str] | None = None,
+    ) -> dict:
         try:
             response = await self.db.rpc(function, params).execute()
         except APIError as error:
             field = error.details
             if error.code == "23505" and field in self._duplicate_entities:
-                value = params[f"p_{field}"]
-                raise exceptions.DuplicateError(
-                    self._duplicate_entities[field], value
-                ) from error
+                key = (
+                    field_param_keys.get(field, f"p_{field}")
+                    if field_param_keys
+                    else f"p_{field}"
+                )
+                if key in params:
+                    raise exceptions.DuplicateError(
+                        self._duplicate_entities[field], params[key]
+                    ) from error
             raise
         return response.data
 
     async def onboard_organization(self, params: dict) -> dict:
-        return await self._execute("onboard_organization_atomic", params)
+        return await self._execute(
+            "onboard_organization_atomic",
+            params,
+            field_param_keys={"phone_number": "p_owner_phone_number"},
+        )
 
     async def onboard_resource(self, params: dict) -> dict:
         return await self._execute("onboard_resource_atomic", params)

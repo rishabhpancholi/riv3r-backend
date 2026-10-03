@@ -16,6 +16,14 @@ and URL existence functions. Register another function in `get_duplicates` to
 extend the checked sources without changing the checking algorithm. The checks
 remain advisory; they do not add database uniqueness guarantees or transactions.
 
+Onboarding RPCs report duplicate values as `23505` errors whose DETAIL equals
+the offending RPC parameter name without the `p_` prefix. The onboarding
+repository translates a matching DETAIL into a domain `DuplicateError` using
+that key; `onboard_organization` carries an explicit legacy mapping so a
+not-yet-migrated database's `phone_number` detail still resolves to
+`p_owner_phone_number`. A duplicate code whose resolved key is absent from the
+RPC params re-raises the original storage error instead of masking it.
+
 Access-token revocation accepts a raw token and its verified expiration timestamp.
 The Redis adapter writes a SHA-256 key until that expiration (rounded up to whole
 seconds), and checks both hashed and legacy raw keys using `EXISTS`. Already
