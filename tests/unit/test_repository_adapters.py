@@ -23,7 +23,10 @@ def database(*responses):
     db = MagicMock()
     query = MagicMock()
     db.table.return_value = query
-    for method in ("select", "eq", "insert", "update", "is_", "order"):
+    for method in (
+        "select", "eq", "insert", "update", "is_", "order", "ilike",
+        "contains", "range",
+    ):
         getattr(query, method).return_value = query
     query.execute = AsyncMock(
         side_effect=[SimpleNamespace(data=rows) for rows in responses]
@@ -147,6 +150,45 @@ async def test_cross_tenant_publish_omits_organization_filter():
         ("id", "project-a"),
         ("status", "draft"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_project_list_keeps_exact_and_text_filters_separate():
+    db, query = database([])
+    query.execute = AsyncMock(return_value=SimpleNamespace(data=[], count=7))
+
+    rows, total = await SupabaseProjectRepository(db).list_projects(
+        organization_id="org-a",
+        spoc_user_id="user-a",
+        status="published",
+        title="API",
+        description="modern",
+        domain="software",
+        skill_tags=["python", "fastapi"],
+        sort_by="published_at",
+        sort_order="asc",
+        offset=10,
+        limit=10,
+    )
+
+    assert rows == []
+    assert total == 7
+    assert [call.args for call in query.eq.call_args_list] == [
+        ("org_id", "org-a"),
+        ("spoc_user_id", "user-a"),
+        ("status", "published"),
+    ]
+    assert [call.args for call in query.ilike.call_args_list] == [
+        ("title", "%API%"),
+        ("description", "%modern%"),
+        ("domain", "%software%"),
+    ]
+    query.contains.assert_called_once_with("skill_tags", ["python", "fastapi"])
+    assert query.order.call_args_list[0].kwargs == {
+        "desc": False,
+        "nullsfirst": False,
+    }
+    query.range.assert_called_once_with(10, 19)
 
 
 @pytest.mark.asyncio

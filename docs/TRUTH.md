@@ -116,6 +116,19 @@ schema and code remain authoritative and this file must be corrected.
 - The primary model is `voyage-4` and the fallback is `voyage-4-lite`; both produce
   compatible 1,024-dimensional Voyage 4-series vectors.
 - Existing published projects are not backfilled by the embedding migration.
+- Project reads require `projects.view` and expose only non-deleted projects.
+  Clients are tenant-scoped; RIV3R users may read across tenants and may filter
+  project lists by an existing organization ID. Clients that supply `org_id` are
+  rejected, and a client's detail request for a foreign project returns 404.
+- Project lists use one-based pagination with an exact total, combine filters with
+  AND, and use exact matching for organization, SPOC, and status. Title,
+  description, and domain use case-insensitive substring matching. Requested skill
+  tags must all be present.
+- Project skill tags are trimmed, lowercased, non-empty, and de-duplicated in input
+  order at the API boundary. Existing tags are normalized by migration.
+- Project detail and list caches are fail-open and bounded by `CACHE_TTL`. Create
+  and publish mutations invalidate organization and global list namespaces;
+  publishing also evicts the affected detail entry.
 
 ## Authorization and data access
 
@@ -132,7 +145,8 @@ schema and code remain authoritative and this file must be corrected.
   `projects.view` and `users.view`; RIV3R owners receive every seeded permission.
   Existing non-owner grants remain unchanged, and resource users receive none.
 - Project creation requires `projects.create`, publishing requires
-  `projects.publish`, and the organization user directory requires `users.view`,
+  `projects.publish`, project reads require `projects.view`, and the organization
+  user directory requires `users.view`,
   in addition to the existing organization and tenant checks.
 - Project creation/publishing allows client and permissioned RIV3R organizations;
   agencies remain denied. Permissioned RIV3R users retain cross-tenant access.

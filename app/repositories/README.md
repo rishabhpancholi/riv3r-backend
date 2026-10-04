@@ -32,6 +32,17 @@ revocation. Refresh-token hashes remain the auth service's responsibility, and
 their database records receive the exact expiration of the signed refresh JWT.
 Storage errors propagate; the audit service retains its existing error handling.
 
+Project detail and list reads select only public project fields and always exclude
+soft-deleted rows. Client detail/list queries carry an organization predicate;
+only an authorized RIV3R service decision may omit it. Exact organization, SPOC,
+and status filters use equality, while title, description, and domain use `ILIKE`.
+
+Project lists use versioned Redis keys scoped to an organization or to the RIV3R
+global view. The canonical filter/page/sort payload is hashed into the key. Project
+creation increments the affected organization and global versions; publication
+does the same and removes the detail key. Cache failures are fail-open and bounded
+by `CACHE_TTL`.
+
 Tokens carry required `iat`, `exp`, and unique `jti` claims. Lifetimes come from
 `jwt_access_token_expire_minutes` and `jwt_refresh_token_expire_days`. Issuance
 copies the input record and replaces token metadata when refreshing. Access and

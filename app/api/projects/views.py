@@ -23,3 +23,11 @@ class Project(BaseModel):
     published_at: datetime | None = None
     domain: str
     skill_tags: list[str]
+
+
+class ProjectList(BaseModel):
+    items: list[Project]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int

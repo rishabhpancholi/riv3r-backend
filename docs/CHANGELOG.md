@@ -3,6 +3,19 @@
 This changelog is reconstructed from the repository's Git history. Dates use the
 commit dates recorded in Git.
 
+## 2026-10-04 — Project detail and searchable project listings
+
+- Added `GET /api/projects/{project_id}` and paginated `GET /api/projects` reads
+  protected by `projects.view`, with client tenant isolation and RIV3R cross-tenant
+  access plus optional organization filtering.
+- Added exact status/SPOC/organization filters, case-insensitive text filters,
+  normalized all-tags matching, deterministic sorting, and nulls-last publication
+  ordering.
+- Added fail-open detail and versioned list caching with create/publish invalidation,
+  normalized existing skill tags, and indexed active-project text search.
+- Added comprehensive project-read API calling documentation and API, service,
+  repository, cache, validation, and migration coverage.
+
 ## 2026-10-03 — Owner-phone duplicate conflict responses
 
 - Fixed organization onboarding returning an unhandled 500 (masking `KeyError`)

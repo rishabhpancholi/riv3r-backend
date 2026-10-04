@@ -18,6 +18,7 @@ must succeed or fail as one unit.
 - Dependency-aware user permissions with cross-tenant access for authorized RIV3R users
 - Tenant-isolated organization user directories with Redis read-through caching
 - Draft project creation and race-safe project publishing with best-effort audits
+- Tenant-scoped project detail and searchable, paginated project listings
 - Publication-time project embeddings with a lower-tier Voyage fallback
 - Backend-only Supabase tables protected from `anon` and `authenticated` roles
 - Unit, API, database-policy, and opt-in live integration tests
@@ -30,7 +31,7 @@ must succeed or fail as one unit.
 | Onboarding | `POST /api/onboarding/organization`, `POST /api/onboarding/resource` |
 | Authentication | `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Users | `GET /api/users` |
-| Projects | `POST /api/projects`, `POST /api/projects/{project_id}/publish` |
+| Projects | `GET /api/projects`, `GET /api/projects/{project_id}`, `POST /api/projects`, `POST /api/projects/{project_id}/publish` |
 
 Interactive OpenAPI documentation is available at `/docs` outside production.
 
@@ -53,6 +54,8 @@ available with a null vector if both hosted attempts fail.
 See [TRUTH.md](TRUTH.md) for the current business and database invariants, and
 [STRUCTURE.md](STRUCTURE.md) for the low-level design. The dated development
 history is maintained in [CHANGELOG.md](CHANGELOG.md).
+Detailed request, filtering, sorting, response, and error documentation for the
+project read endpoints is available in [API.md](API.md).
 
 ## Local setup
 
@@ -108,13 +111,22 @@ fall back to Supabase. Until user mutation APIs are introduced, direct database
 changes can remain cached until that TTL expires.
 
 Project creation requires `projects.create`, project publishing requires
-`projects.publish`, and the organization directory requires `users.view`.
+`projects.publish`, project reads require `projects.view`, and the organization
+directory requires `users.view`.
 `projects.create` automatically includes `projects.view` and `users.view`;
 `projects.publish` includes `projects.view`. Client users receive the project
 creation and publication grants, RIV3R owners receive all seeded permissions, and
 agency owners receive `projects.view` and `users.view`. These owner defaults are
 inserted atomically by organization onboarding. Permission decisions are read from
 PostgreSQL on every protected request and are not cached.
+
+`GET /api/projects/{project_id}` returns one active project. Clients receive 404
+for missing, deleted, or foreign-organization projects; RIV3R may read any active
+project. `GET /api/projects` supports exact organization, SPOC, and status filters,
+case-insensitive title/description/domain filters, all-tags matching, pagination,
+and sorting. The `org_id` query parameter is RIV3R-only. Project reads are cached
+for `CACHE_TTL`, with create and publish operations invalidating affected list
+namespaces. Skill tags are stored and returned trimmed, lowercase, and unique.
 
 `GET /api/auth/me` includes a sorted `permissions` array containing all direct and
 inherited permissions currently effective for the authenticated user, plus

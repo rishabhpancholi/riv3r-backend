@@ -67,8 +67,8 @@ Supabase/Redis clients or import FastAPI request dependencies.
 
 - `contracts.py` contains narrow async `Protocol` interfaces consumed by services.
 - `supabase.py` implements PostgreSQL/PostgREST storage operations and RPC calls.
-- `redis.py` implements access-token revocation and fail-open organization-directory
-  caching.
+- `redis.py` implements access-token revocation plus fail-open organization-directory
+  and versioned project caching.
 
 Repository methods own query construction and storage-specific response handling.
 Business authorization belongs in services/permission checkers, but every mutation
@@ -180,6 +180,23 @@ Rules:
 5. If no row updates, the service re-reads once to classify a concurrent deletion,
    tenant change, or lifecycle conflict accurately.
 6. The route attempts a best-effort `project_publish` audit after success.
+
+### Project reads
+
+1. Authentication is followed by ordered client/RIV3R eligibility and the
+   effective `projects.view` permission check.
+2. Detail requests use a tenant predicate for clients and return 404 for missing,
+   deleted, or foreign projects. RIV3R omits the tenant predicate.
+3. List requests derive scope from the caller. Only RIV3R may supply `org_id`, and
+   an explicit target must be an existing organization.
+4. Exact organization, SPOC, and status predicates remain separate from text
+   substring filters. All requested normalized skill tags must be present.
+5. Detail results and paginated list envelopes use fail-open Redis cache-aside
+   reads. List keys include an organization/global version and a canonical query
+   hash. Create and publish advance both affected organization and global versions;
+   publish also deletes the detail key.
+6. Reads are not audited. Cached data is validated before use and can remain stale
+   for at most `CACHE_TTL` if invalidation fails.
 
 ### Organization user directory
 

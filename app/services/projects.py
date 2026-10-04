@@ -1,12 +1,23 @@
 import asyncio
+import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from app.api.projects import schemas
+from pydantic import ValidationError
+
+from app.api.projects import schemas, views
 from app.core import exceptions
 from app.core.permissions import PermissionChecker
-from app.repositories.contracts import MembershipRepository, ProjectRepository
+from app.repositories.contracts import (
+    MembershipRepository,
+    OrganizationRepository,
+    ProjectCache,
+    ProjectRepository,
+)
 from app.services.project_embeddings import ProjectEmbeddingGenerator
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectService:
@@ -15,11 +26,19 @@ class ProjectService:
         *,
         projects: ProjectRepository,
         memberships: MembershipRepository,
+        organizations: OrganizationRepository,
+        cache: ProjectCache,
         embedding_generator: ProjectEmbeddingGenerator,
     ):
         self.projects = projects
         self.memberships = memberships
+        self.organizations = organizations
+        self.cache = cache
         self.embedding_generator = embedding_generator
+
+    @staticmethod
+    def _validated_project(project: dict) -> dict:
+        return views.Project.model_validate(project).model_dump(mode="json")
 
     async def create_project(
         self,
@@ -61,7 +80,95 @@ class ProjectService:
                     embedded_at=datetime.now(UTC).isoformat(),
                 )
 
-        return await self.projects.store_project(project_data)
+        created = await self.projects.store_project(project_data)
+        await self.cache.invalidate(None, str(created["org_id"]))
+        return created
+
+    async def get_project(
+        self,
+        project_id: str,
+        current_user: dict,
+        permission_checker: PermissionChecker,
+    ) -> dict:
+        decision = await permission_checker.check(current_user)
+        organization_id = None if decision.cross_tenant else current_user["org_id"]
+
+        cache_key, cached = await self.cache.get_detail(project_id)
+        if cached is not None:
+            try:
+                project = self._validated_project(cached)
+                if organization_id is None or project["org_id"] == organization_id:
+                    return project
+                raise exceptions.NotFoundError("project")
+            except ValidationError:
+                logger.warning("Ignoring invalid project cache for id=%s", project_id)
+
+        project = await self.projects.get_visible_project(project_id, organization_id)
+        if not project:
+            raise exceptions.NotFoundError("project")
+        validated = self._validated_project(project)
+        if cache_key is not None:
+            await self.cache.set_detail(cache_key, validated)
+        return validated
+
+    async def list_projects(
+        self,
+        query: schemas.ProjectListQuery,
+        current_user: dict,
+        permission_checker: PermissionChecker,
+    ) -> dict:
+        decision = await permission_checker.check(current_user)
+        requested_org_id = str(query.org_id) if query.org_id is not None else None
+        if not decision.cross_tenant and requested_org_id is not None:
+            raise exceptions.PermissionError(
+                detail="Only RIV3R users can filter projects by organization"
+            )
+        if decision.cross_tenant and requested_org_id is not None:
+            organization = await self.organizations.get_organization_by_id(
+                requested_org_id
+            )
+            if not organization:
+                raise exceptions.NotFoundError("organization")
+
+        organization_id = (
+            requested_org_id if decision.cross_tenant else current_user["org_id"]
+        )
+        scope = f"org:{organization_id}" if organization_id else "global"
+        cache_query = query.model_dump(mode="json", exclude={"org_id"})
+        cache_key, cached = await self.cache.get_list(scope, cache_query)
+        if cached is not None:
+            try:
+                return views.ProjectList.model_validate(cached).model_dump(mode="json")
+            except ValidationError:
+                logger.warning(
+                    "Ignoring invalid project-list cache for scope=%s", scope
+                )
+
+        rows, total = await self.projects.list_projects(
+            organization_id=organization_id,
+            spoc_user_id=(
+                str(query.spoc_user_id) if query.spoc_user_id is not None else None
+            ),
+            status=query.status.value if query.status is not None else None,
+            title=query.title,
+            description=query.description,
+            domain=query.domain,
+            skill_tags=query.skill_tags,
+            sort_by=query.sort_by.value,
+            sort_order=query.sort_order.value,
+            offset=(query.page - 1) * query.page_size,
+            limit=query.page_size,
+        )
+        result = views.ProjectList(
+            items=[views.Project.model_validate(row) for row in rows],
+            page=query.page,
+            page_size=query.page_size,
+            total=total,
+            total_pages=(total + query.page_size - 1) // query.page_size,
+        ).model_dump(mode="json")
+        if cache_key is not None:
+            await self.cache.set_list(cache_key, result)
+        return result
 
     async def publish_project(
         self,
@@ -112,6 +219,9 @@ class ProjectService:
             ),
         )
         if published:
+            await self.cache.invalidate(
+                project_id, str(published["org_id"])
+            )
             return published
 
         current = await self.projects.get_project_by_id(project_id)

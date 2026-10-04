@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Request, status
 
 from app.api.projects import dependencies as deps
@@ -8,6 +10,32 @@ from app.services.audit import AuditService
 from app.services.projects import ProjectService
 
 projects_router = APIRouter(prefix="/api/projects", tags=["Projects"])
+
+
+@projects_router.get("", response_model=views.ProjectList)
+async def list_projects(
+    query: schemas.ProjectListQueryDependency,
+    current_user: dict = Depends(core_deps.get_current_user),
+    project_service: ProjectService = Depends(deps.get_project_service),
+    permission_checker: PermissionChecker = Depends(
+        deps.get_read_project_permission_checker
+    ),
+) -> dict:
+    return await project_service.list_projects(query, current_user, permission_checker)
+
+
+@projects_router.get("/{project_id}", response_model=views.Project)
+async def get_project(
+    project_id: UUID,
+    current_user: dict = Depends(core_deps.get_current_user),
+    project_service: ProjectService = Depends(deps.get_project_service),
+    permission_checker: PermissionChecker = Depends(
+        deps.get_read_project_permission_checker
+    ),
+) -> dict:
+    return await project_service.get_project(
+        str(project_id), current_user, permission_checker
+    )
 
 
 @projects_router.post(

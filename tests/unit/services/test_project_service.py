@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.api.projects.schemas import CreateProject
+from app.api.projects.schemas import CreateProject, ProjectListQuery
 from app.core import exceptions
 from app.core.permissions import PermissionChecker, PermissionDecision
 from app.services.projects import ProjectService
@@ -40,6 +40,8 @@ def setup():
     service = ProjectService(
         projects=repo.projects,
         memberships=repo.memberships,
+        organizations=repo.organizations,
+        cache=repo.project_cache,
         embedding_generator=embedding_generator,
     )
     user = {"id": "user-1", "org_id": "org-1", "is_resource": False}
@@ -231,3 +233,124 @@ async def test_draft_publication_fails_open_without_embedding(setup):
     assert repo.projects.publish_draft.call_args.kwargs["embedding"] is None
     assert repo.projects.publish_draft.call_args.kwargs["embedding_model"] is None
     assert repo.projects.publish_draft.call_args.kwargs["embedded_at"] is None
+
+
+def readable_project(**overrides):
+    project = {
+        "id": "d7e34e0e-e12d-4fd7-9370-a76217e10724",
+        "created_at": "2026-10-01T12:00:00+00:00",
+        "updated_at": "2026-10-01T12:00:00+00:00",
+        "deleted_at": None,
+        "org_id": "11111111-1111-4111-8111-111111111111",
+        "created_by_user_id": "22222222-2222-4222-8222-222222222222",
+        "spoc_user_id": "33333333-3333-4333-8333-333333333333",
+        "title": "API modernization",
+        "description": "Modernize the API",
+        "status": "draft",
+        "deadline_date": "2027-01-01",
+        "budget": "12500.00",
+        "currency": "USD",
+        "published_at": None,
+        "domain": "Software",
+        "skill_tags": ["python"],
+    }
+    project.update(overrides)
+    return project
+
+
+@pytest.mark.asyncio
+async def test_client_detail_uses_tenant_scoped_lookup(setup):
+    service, repo, checker, _, _ = setup
+    user = {
+        "id": "user-1",
+        "org_id": "11111111-1111-4111-8111-111111111111",
+        "is_resource": False,
+    }
+    repo.project_cache.get_detail.return_value = ("project:detail:0", None)
+    repo.projects.get_visible_project.return_value = readable_project()
+
+    result = await service.get_project(readable_project()["id"], user, checker)
+
+    assert result["title"] == "API modernization"
+    repo.projects.get_visible_project.assert_awaited_once_with(
+        readable_project()["id"], user["org_id"]
+    )
+    repo.project_cache.set_detail.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_client_detail_foreign_cached_project_is_not_found(setup):
+    service, repo, checker, user, _ = setup
+    repo.project_cache.get_detail.return_value = (
+        "project:cached:0",
+        readable_project(),
+    )
+
+    with pytest.raises(exceptions.NotFoundError):
+        await service.get_project(readable_project()["id"], user, checker)
+
+    repo.projects.get_visible_project.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_client_cannot_supply_organization_filter(setup):
+    service, _, checker, user, _ = setup
+
+    with pytest.raises(exceptions.PermissionError):
+        await service.list_projects(
+            ProjectListQuery(org_id="11111111-1111-4111-8111-111111111111"),
+            user,
+            checker,
+        )
+
+
+@pytest.mark.asyncio
+async def test_riv3r_list_uses_exact_filters_and_pagination(setup):
+    service, repo, checker, user, _ = setup
+    checker.check.return_value = PermissionDecision(cross_tenant=True)
+    org_id = "11111111-1111-4111-8111-111111111111"
+    spoc_id = "33333333-3333-4333-8333-333333333333"
+    repo.organizations.get_organization_by_id.return_value = {"id": org_id}
+    repo.project_cache.get_list.return_value = ("projects:list:org:key", None)
+    repo.projects.list_projects.return_value = ([readable_project()], 21)
+    query = ProjectListQuery(
+        page=2,
+        page_size=10,
+        org_id=org_id,
+        spoc_user_id=spoc_id,
+        status="draft",
+        title="API",
+        skill_tags=["PYTHON"],
+        sort_by="published_at",
+        sort_order="asc",
+    )
+
+    result = await service.list_projects(query, user, checker)
+
+    assert result["total"] == 21
+    assert result["total_pages"] == 3
+    assert result["page"] == 2
+    assert repo.projects.list_projects.await_args.kwargs == {
+        "organization_id": org_id,
+        "spoc_user_id": spoc_id,
+        "status": "draft",
+        "title": "API",
+        "description": None,
+        "domain": None,
+        "skill_tags": ["python"],
+        "sort_by": "published_at",
+        "sort_order": "asc",
+        "offset": 10,
+        "limit": 10,
+    }
+    repo.project_cache.set_list.assert_awaited_once()
+
+
+def test_create_project_normalizes_skill_tags():
+    project = project_payload(skill_tags=[" Python ", "FASTAPI", "python"])
+    assert project.skill_tags == ["python", "fastapi"]
+
+
+def test_create_project_rejects_empty_skill_tag():
+    with pytest.raises(ValueError, match="Skill tags cannot be empty"):
+        project_payload(skill_tags=["  "])

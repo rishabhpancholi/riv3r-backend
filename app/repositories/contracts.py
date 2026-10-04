@@ -59,6 +59,24 @@ class OnboardingRepository(Protocol):
 class ProjectRepository(Protocol):
     async def store_project(self, project: dict) -> dict: ...
     async def get_project_by_id(self, project_id: str) -> dict | None: ...
+    async def get_visible_project(
+        self, project_id: str, organization_id: str | None
+    ) -> dict | None: ...
+    async def list_projects(
+        self,
+        *,
+        organization_id: str | None,
+        spoc_user_id: str | None,
+        status: str | None,
+        title: str | None,
+        description: str | None,
+        domain: str | None,
+        skill_tags: list[str],
+        sort_by: str,
+        sort_order: str,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[dict], int]: ...
     async def publish_draft(
         self,
         project_id: str,
@@ -83,3 +101,13 @@ class AccessTokenRevocationStore(Protocol):
 class OrganizationUsersCache(Protocol):
     async def get(self, organization_id: str) -> list[dict] | None: ...
     async def set(self, organization_id: str, users: list[dict]) -> None: ...
+
+
+class ProjectCache(Protocol):
+    async def get_detail(self, project_id: str) -> tuple[str | None, dict | None]: ...
+    async def set_detail(self, cache_key: str, project: dict) -> None: ...
+    async def get_list(
+        self, scope: str, query: dict
+    ) -> tuple[str | None, dict | None]: ...
+    async def set_list(self, cache_key: str, result: dict) -> None: ...
+    async def invalidate(self, project_id: str | None, organization_id: str) -> None: ...

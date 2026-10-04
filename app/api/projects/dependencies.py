@@ -1,4 +1,5 @@
 from fastapi import Depends
+from redis.asyncio import Redis
 from supabase import AsyncClient
 
 from app.clients.contracts import EmbeddingsClient
@@ -12,6 +13,7 @@ from app.core.permissions import (
 )
 from app.repositories import contracts
 from app.repositories import supabase as repositories
+from app.repositories.redis import RedisProjectCache
 from app.services.projects import ProjectService
 from app.services.project_embeddings import ProjectEmbeddingGenerator
 
@@ -20,6 +22,12 @@ def get_projects(
     db: AsyncClient = Depends(core_deps.get_db),
 ) -> contracts.ProjectRepository:
     return repositories.SupabaseProjectRepository(db)
+
+
+def get_project_cache(
+    cache: Redis = Depends(core_deps.get_cache),
+) -> contracts.ProjectCache:
+    return RedisProjectCache(cache, ttl=load_settings().cache_ttl)
 
 
 def get_project_embedding_generator(
@@ -40,6 +48,10 @@ def get_project_embedding_generator(
 def get_project_service(
     projects: contracts.ProjectRepository = Depends(get_projects),
     memberships: contracts.MembershipRepository = Depends(core_deps.get_memberships),
+    organizations: contracts.OrganizationRepository = Depends(
+        core_deps.get_organizations
+    ),
+    cache: contracts.ProjectCache = Depends(get_project_cache),
     embedding_generator: ProjectEmbeddingGenerator = Depends(
         get_project_embedding_generator
     ),
@@ -47,7 +59,25 @@ def get_project_service(
     return ProjectService(
         projects=projects,
         memberships=memberships,
+        organizations=organizations,
+        cache=cache,
         embedding_generator=embedding_generator,
+    )
+
+
+def get_read_project_permission_checker(
+    organizations: contracts.OrganizationRepository = Depends(
+        core_deps.get_organizations
+    ),
+    permissions: contracts.PermissionRepository = Depends(core_deps.get_permissions),
+) -> PermissionChecker:
+    return OrderedPermissionChecker(
+        (
+            OrganizationLevelPermissionChecker(
+                organizations, allowed_org_types={"client"}
+            ),
+            UserPermissionChecker(permissions, required_permission="projects.view"),
+        )
     )
 
 

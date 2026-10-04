@@ -243,6 +243,12 @@ class SupabaseAuditLogRepository:
 
 
 class SupabaseProjectRepository:
+    _public_fields = (
+        "id,created_at,updated_at,deleted_at,org_id,created_by_user_id,"
+        "spoc_user_id,title,description,status,deadline_date,budget,currency,"
+        "published_at,domain,skill_tags"
+    )
+
     def __init__(self, db: AsyncClient):
         self.db = db
 
@@ -259,6 +265,66 @@ class SupabaseProjectRepository:
             .execute()
         )
         return response.data[0] if response.data else None
+
+    async def get_visible_project(
+        self, project_id: str, organization_id: str | None
+    ) -> dict | None:
+        query = (
+            self.db.table("projects")
+            .select(self._public_fields)
+            .eq("id", project_id)
+            .is_("deleted_at", "null")
+        )
+        if organization_id is not None:
+            query = query.eq("org_id", organization_id)
+        response = await query.execute()
+        return response.data[0] if response.data else None
+
+    async def list_projects(
+        self,
+        *,
+        organization_id: str | None,
+        spoc_user_id: str | None,
+        status: str | None,
+        title: str | None,
+        description: str | None,
+        domain: str | None,
+        skill_tags: list[str],
+        sort_by: str,
+        sort_order: str,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[dict], int]:
+        query = (
+            self.db.table("projects")
+            .select(self._public_fields, count="exact")
+            .is_("deleted_at", "null")
+        )
+        if organization_id is not None:
+            query = query.eq("org_id", organization_id)
+        if spoc_user_id is not None:
+            query = query.eq("spoc_user_id", spoc_user_id)
+        if status is not None:
+            query = query.eq("status", status)
+        for field, value in (
+            ("title", title),
+            ("description", description),
+            ("domain", domain),
+        ):
+            if value is not None:
+                query = query.ilike(field, f"%{value}%")
+        if skill_tags:
+            query = query.contains("skill_tags", skill_tags)
+
+        ascending = sort_order == "asc"
+        order_options = {"desc": not ascending}
+        if sort_by == "published_at":
+            order_options["nullsfirst"] = False
+        query = query.order(sort_by, **order_options).order(
+            "id", desc=not ascending
+        )
+        response = await query.range(offset, offset + limit - 1).execute()
+        return response.data, response.count or 0
 
     async def publish_draft(
         self,

@@ -52,6 +52,9 @@ def client():
     test_app.dependency_overrides[deps.get_memberships] = lambda: repo.memberships
     test_app.dependency_overrides[deps.get_resources] = lambda: repo.resources
     test_app.dependency_overrides[project_deps.get_projects] = lambda: repo.projects
+    test_app.dependency_overrides[
+        project_deps.get_project_cache
+    ] = lambda: repo.project_cache
     test_app.dependency_overrides[deps.get_refresh_tokens] = lambda: repo.refresh_tokens
     test_app.dependency_overrides[
         onboarding_deps.get_onboarding_repository

@@ -40,6 +40,9 @@ def repository_mocks():
         organization_users_cache=create_autospec(
             contracts.OrganizationUsersCache, instance=True, spec_set=True
         ),
+        project_cache=create_autospec(
+            contracts.ProjectCache, instance=True, spec_set=True
+        ),
         duplicates=create_autospec(DuplicateChecker, instance=True, spec_set=True),
     )
     repositories.users.get_user_with_id.return_value = None
@@ -51,6 +54,8 @@ def repository_mocks():
     repositories.resources.get_resource_by_user_id.return_value = None
     repositories.revocations.is_revoked.return_value = False
     repositories.organization_users_cache.get.return_value = None
+    repositories.project_cache.get_detail.return_value = (None, None)
+    repositories.project_cache.get_list.return_value = (None, None)
     return repositories
 
 
